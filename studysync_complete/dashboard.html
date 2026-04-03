@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StudySync — Dashboard</title>
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon"><i class="fa-solid fa-bolt"></i></div>
+        <span class="brand-name">StudySync</span>
+        <button class="sidebar-toggle" onclick="toggleSidebar()">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+      </div>
+      <div
+        class="sidebar-group-card"
+        id="sidebarGroupCard"
+        onclick="openGroupModal()"
+      >
+        <div class="group-avatar" id="sidebarGroupAvatar">SG</div>
+        <div>
+          <div class="group-name" id="sidebarGroupName">My Study Group</div>
+          <div class="group-members" id="sidebarGroupMembers">0 members</div>
+          <div class="group-code" id="groupCodeDisplay"></div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a
+          href="#"
+          class="nav-item active"
+          onclick="switchPage('dashboard', this)"
+          ><i class="fa-solid fa-grid-2"></i><span>Dashboard</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('calendar', this)"
+          ><i class="fa-regular fa-calendar"></i><span>Calendar</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('tasks', this)"
+          ><i class="fa-solid fa-list-check"></i><span>Tasks</span
+          ><span class="nav-badge" id="taskBadge">0</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('progress', this)"
+          ><i class="fa-solid fa-chart-pie"></i><span>Progress</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('leaderboard', this)"
+          ><i class="fa-solid fa-trophy"></i><span>Leaderboard</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('resources', this)"
+          ><i class="fa-solid fa-folder-open"></i><span>Resources</span></a
+        >
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="user-chip" id="userChip">
+          <div class="user-avatar" id="sidebarAvatar">A</div>
+          <div class="user-info">
+            <div class="user-name" id="sidebarUserName">Loading...</div>
+            <div class="user-pts" id="sidebarUserPts">0 pts</div>
+          </div>
+          <button class="logout-btn" onclick="handleLogout()" title="Logout">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content" id="mainContent">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="page-title" id="pageTitle">Dashboard</div>
+          <div class="breadcrumb" id="breadcrumb">Overview</div>
+        </div>
+        <div class="topbar-right">
+          <div class="search-bar">
+            <i class="fa-solid fa-search"></i
+            ><input type="text" placeholder="Search tasks, events..." />
+          </div>
+          <button
+            class="icon-btn"
+            onclick="openGroupModal()"
+            title="Group Settings"
+          >
+            <i class="fa-solid fa-users-gear"></i>
+          </button>
+          <button class="icon-btn notif-btn" onclick="toggleNotif()">
+            <i class="fa-regular fa-bell"></i
+            ><span class="notif-dot" id="notifDot"></span>
+          </button>
+          <div class="topbar-avatar" id="topbarAvatar">A</div>
+        </div>
+      </header>
+
+      <div class="notif-panel hidden" id="notifPanel">
+        <div class="notif-header">
+          <span>Notifications</span
+          ><button onclick="toggleNotif()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div id="notifList" class="notif-list">
+          <div class="notif-item">
+            <i class="fa-solid fa-circle-info accent3"></i
+            ><span>Set up your group to get started!</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD PAGE -->
+      <div class="page active" id="page-dashboard">
+        <div class="smart-alert" id="smartAlert">
+          <div class="smart-icon"><i class="fa-solid fa-robot"></i></div>
+          <div class="smart-text">
+            <strong>AI Study Planner</strong
+            ><span id="smartMsg">Loading your personalized plan...</span>
+          </div>
+          <button
+            class="smart-close"
+            onclick="this.parentElement.style.display = 'none'"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="dashboard-grid">
+          <div class="card welcome-card col-span-2">
+            <div class="welcome-text">
+              <div class="welcome-greeting" id="welcomeGreeting">
+                Good morning 👋
+              </div>
+              <div class="welcome-name" id="welcomeName">Student</div>
+              <p id="welcomeSub">Here's your study overview for today.</p>
+            </div>
+            <div class="welcome-stats">
+              <div class="w-stat">
+                <span id="wsToday">0</span><label>Today's Tasks</label>
+              </div>
+              <div class="w-stat">
+                <span id="wsStreak">0 🔥</span><label>Day Streak</label>
+              </div>
+              <div class="w-stat">
+                <span id="wsPoints">0</span><label>Points</label>
+              </div>
+            </div>
+          </div>
+          <div class="card calendar-card">
+            <div class="card-header">
+              <span>Schedule</span
+              ><button onclick="switchPage('calendar', null)" class="card-link">
+                View All →
+              </button>
+            </div>
+            <div id="miniCalendar" class="mini-cal"></div>
+            <div id="todayEvents" class="today-events"></div>
+          </div>
+          <div class="card task-summary-card">
+            <div class="card-header">
+              <span>Tasks</span
+              ><button onclick="switchPage('tasks', null)" class="card-link">
+                Manage →
+              </button>
+            </div>
+            <div class="task-donut-wrap">
+              <canvas id="taskDonut" width="120" height="120"></canvas>
+              <div class="donut-label">
+                <span id="donutPct">0%</span><small>Done</small>
+              </div>
+            </div>
+            <div class="task-bars" id="taskBarsUI"></div>
+          </div>
+          <div class="card activity-card">
+            <div class="card-header"><span>Activity Feed</span></div>
+            <div id="activityFeed" class="activity-list"></div>
+          </div>
+          <div class="card progress-card">
+            <div class="card-header">
+              <span>Member Points</span
+              ><button onclick="switchPage('progress', null)" class="card-link">
+                Details →
+              </button>
+            </div>
+            <canvas id="progressBar" height="160"></canvas>
+          </div>
+          <div class="card leaderboard-card">
+            <div class="card-header">
+              <span>Leaderboard 🏆</span
+              ><button
+                onclick="switchPage('leaderboard', null)"
+                class="card-link"
+              >
+                Full View →
+              </button>
+            </div>
+            <div id="leaderPreview" class="leader-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CALENDAR PAGE -->
+      <div class="page" id="page-calendar">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <button class="tool-btn" onclick="calNav(-1)">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <span class="cal-title" id="calTitle"></span>
+            <button class="tool-btn" onclick="calNav(1)">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+            <button class="tool-btn today-btn" onclick="goToToday()">
+              Today
+            </button>
+          </div>
+          <div class="toolbar-right">
+            <button class="tool-btn active" onclick="setCalView('month', this)">
+              Month
+            </button>
+            <button class="tool-btn" onclick="setCalView('week', this)">
+              Week
+            </button>
+            <button class="btn-accent" onclick="openEventModal()">
+              <i class="fa-solid fa-plus"></i> Add Event
+            </button>
+          </div>
+        </div>
+        <div class="card cal-card">
+          <div id="calHeader" class="cal-header"></div>
+          <div id="calBody" class="cal-body"></div>
+        </div>
+      </div>
+
+      <!-- TASKS PAGE -->
+      <div class="page" id="page-tasks">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <div class="task-filters">
+              <button
+                class="filter-btn active"
+                onclick="filterTasks('all', this)"
+              >
+                All
+              </button>
+              <button class="filter-btn" onclick="filterTasks('mine', this)">
+                Mine
+              </button>
+              <button class="filter-btn" onclick="filterTasks('overdue', this)">
+                Overdue
+              </button>
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn-accent" onclick="openTaskModal()">
+              <i class="fa-solid fa-plus"></i> Add Task
+            </button>
+          </div>
+        </div>
+        <div class="kanban-board" id="kanbanBoard">
+          <div
+            class="kanban-col"
+            id="col-todo"
+            ondragover="event.preventDefault()"
+            ondrop="dropTask(event, 'todo')"
+          >
+            <div class="kanban-col-header">
+              <span class="col-dot" style="background: #a78bfa"></span
+              ><span>To Do</span
+              ><span class="col-count" id="count-todo">0</span>
+            </div>
+            <div class="kanban-cards" id="cards-todo"></div>
+            <button class="add-task-inline" onclick="openTaskModal('todo')">
+              <i class="fa-solid fa-plus"></i> Add task
+            </button>
+          </div>
+          <div
+            class="kanban-col"
+            id="col-inprogress"
+            ondragover="event.preventDefault()"
+            ondrop="dropTask(event, 'inprogress')"
+          >
+            <div class="kanban-col-header">
+              <span class="col-dot" style="background: #ff6b35"></span
+              ><span>In Progress</span
+              ><span class="col-count" id="count-inprogress">0</span>
+            </div>
+            <div class="kanban-cards" id="cards-inprogress"></div>
+            <button
+              class="add-task-inline"
+              onclick="openTaskModal('inprogress')"
+            >
+              <i class="fa-solid fa-plus"></i> Add task
+            </button>
+          </div>
+          <div
+            class="kanban-col"
+            id="col-completed"
+            ondragover="event.preventDefault()"
+            ondrop="dropTask(event, 'completed')"
+          >
+            <div class="kanban-col-header">
+              <span class="col-dot" style="background: #4ecdc4"></span
+              ><span>Completed</span
+              ><span class="col-count" id="count-completed">0</span>
+            </div>
+            <div class="kanban-cards" id="cards-completed"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROGRESS PAGE -->
+      <div class="page" id="page-progress">
+        <div class="progress-page-grid">
+          <div class="card">
+            <div class="card-header">
+              <span>Task Completion Breakdown</span>
+            </div>
+            <canvas id="bigPieChart" height="260"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><span>Member Task Performance</span></div>
+            <canvas id="bigBarChart" height="260"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><span>Points Leaderboard Chart</span></div>
+            <canvas id="pointsBarChart" height="240"></canvas>
+          </div>
+          <div class="card">
+            <div class="card-header"><span>Insights</span></div>
+            <div id="insightsList" class="insights-list"></div>
+          </div>
+          <div class="card burnout-card col-span-2">
+            <div class="card-header">
+              <span
+                ><i
+                  class="fa-solid fa-fire-flame-curved"
+                  style="color: #ff6b35"
+                ></i>
+                Activity Monitor</span
+              >
+            </div>
+            <div id="burnoutList" class="burnout-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEADERBOARD PAGE -->
+      <div class="page" id="page-leaderboard">
+        <div class="leaderboard-page">
+          <div class="podium-area" id="podiumArea"></div>
+          <div class="lb-bottom-grid">
+            <div class="card leaderboard-full-card">
+              <div class="card-header"><span>Full Rankings</span></div>
+              <div id="leaderboardFull" class="lb-full-list"></div>
+            </div>
+            <div class="card points-breakdown-card">
+              <div class="card-header"><span>How to Earn Points ⚡</span></div>
+              <div id="pointsBreakdown" class="pts-breakdown-list"></div>
+              <div class="my-pts-display">
+                <div class="my-pts-label">Your Points</div>
+                <div class="my-pts-value" id="myPtsLarge">0</div>
+                <div class="my-pts-streak" id="myStreakLarge"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESOURCES PAGE -->
+      <div class="page" id="page-resources">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <div class="task-filters" id="resourceFilters">
+              <button
+                class="filter-btn active"
+                onclick="filterResources('all', this)"
+              >
+                All
+              </button>
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn-accent" onclick="openResourceModal()">
+              <i class="fa-solid fa-plus"></i> Share Resource
+            </button>
+          </div>
+        </div>
+        <div class="resource-grid" id="resourceGrid"></div>
+      </div>
+    </main>
+
+    <!-- GROUP MODAL -->
+    <div class="modal-overlay hidden" id="groupModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span>Study Group</span
+          ><button onclick="closeModal('groupModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-tabs">
+          <button
+            class="modal-tab active"
+            onclick="switchModalTab('create', this)"
+          >
+            Create Group
+          </button>
+          <button class="modal-tab" onclick="switchModalTab('join', this)">
+            Join Group
+          </button>
+        </div>
+        <div id="modal-create" class="modal-body">
+          <div class="form-group">
+            <label>Group Name</label
+            ><input
+              type="text"
+              id="grpName"
+              placeholder="e.g. CS301 Study Squad"
+            />
+          </div>
+          <div class="form-group">
+            <label>Subject / Course</label
+            ><input
+              type="text"
+              id="grpSubject"
+              placeholder="e.g. Computer Science"
+            />
+          </div>
+          <button class="btn-primary" onclick="createGroup()">
+            <span>Create Group</span><i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+        <div id="modal-join" class="modal-body hidden">
+          <div class="form-group">
+            <label>Invite Code</label
+            ><input
+              type="text"
+              id="joinCode"
+              placeholder="Enter 6-digit code"
+              style="text-transform: uppercase; letter-spacing: 4px"
+            />
+          </div>
+          <button class="btn-primary" onclick="joinGroup()">
+            <span>Join Group</span><i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+        <div id="groupModalMsg" class="auth-msg hidden"></div>
+      </div>
+    </div>
+
+    <!-- EVENT MODAL -->
+    <div class="modal-overlay hidden" id="eventModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span id="eventModalTitle">Add Event</span
+          ><button onclick="closeModal('eventModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Event Title</label
+            ><input
+              type="text"
+              id="evTitle"
+              placeholder="Study Session: Math"
+            />
+          </div>
+          <div class="form-group">
+            <label>Date</label><input type="date" id="evDate" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Start Time</label><input type="time" id="evStartTime" />
+            </div>
+            <div class="form-group">
+              <label>End Time</label><input type="time" id="evEndTime" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Color Label</label>
+            <div class="color-row">
+              <button
+                class="color-dot active"
+                style="background: #ff6b35"
+                data-color="#ff6b35"
+                onclick="pickColor(this)"
+              ></button>
+              <button
+                class="color-dot"
+                style="background: #a78bfa"
+                data-color="#a78bfa"
+                onclick="pickColor(this)"
+              ></button>
+              <button
+                class="color-dot"
+                style="background: #4ecdc4"
+                data-color="#4ecdc4"
+                onclick="pickColor(this)"
+              ></button>
+              <button
+                class="color-dot"
+                style="background: #ffd60a"
+                data-color="#ffd60a"
+                onclick="pickColor(this)"
+              ></button>
+              <button
+                class="color-dot"
+                style="background: #60a5fa"
+                data-color="#60a5fa"
+                onclick="pickColor(this)"
+              ></button>
+              <button
+                class="color-dot"
+                style="background: #f472b6"
+                data-color="#f472b6"
+                onclick="pickColor(this)"
+              ></button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Notes</label
+            ><textarea id="evNotes" placeholder="Any notes..."></textarea>
+          </div>
+          <button class="btn-primary" onclick="saveEvent()">
+            <span id="evSaveTxt">Save Event</span
+            ><i class="fa-solid fa-check"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TASK MODAL -->
+    <div class="modal-overlay hidden" id="taskModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span id="taskModalTitle">Add Task</span
+          ><button onclick="closeModal('taskModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Task Name</label
+            ><input
+              type="text"
+              id="tskTitle"
+              placeholder="e.g. Complete Chapter 5 notes"
+            />
+          </div>
+          <div class="form-group">
+            <label>Deadline Date</label><input type="date" id="tskDeadline" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Start Time</label><input type="time" id="tskStartTime" />
+            </div>
+            <div class="form-group">
+              <label>End Time</label><input type="time" id="tskEndTime" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Priority</label>
+              <select id="tskPriority">
+                <option value="low">🟢 Low (10 pts)</option>
+                <option value="medium" selected>🟡 Medium (15 pts)</option>
+                <option value="high">🔴 High (25 pts)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Status</label>
+              <select id="tskColumn">
+                <option value="todo">To Do</option>
+                <option value="inprogress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Assign To</label>
+            <select id="tskAssign">
+              <option value="">Unassigned</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="saveTask()">
+            <span id="tskSaveTxt">Add Task</span
+            ><i class="fa-solid fa-check"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESOURCE MODAL -->
+    <div class="modal-overlay hidden" id="resourceModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span>Share Resource</span
+          ><button onclick="closeModal('resourceModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Title</label
+            ><input
+              type="text"
+              id="resTitle"
+              placeholder="Study Notes: Chapter 3"
+            />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Type</label>
+              <select id="resType">
+                <option value="link">🔗 Link</option>
+                <option value="pdf">📄 PDF Link</option>
+                <option value="notes">📝 Notes</option>
+                <option value="video">🎥 Video</option>
+                <option value="file">📁 Upload File</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Subject</label
+              ><input type="text" id="resSubject" placeholder="Mathematics" />
+            </div>
+          </div>
+          <div id="resUrlRow" class="form-group">
+            <label>URL / Link</label
+            ><input type="url" id="resUrl" placeholder="https://..." />
+          </div>
+          <div id="resFileRow" class="form-group" style="display: none">
+            <label
+              >Upload File
+              <span style="color: var(--text-muted); font-size: 12px"
+                >(max 25MB)</span
+              ></label
+            >
+            <input
+              type="file"
+              id="resFile"
+              class="file-input"
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.mp4,.mp3,.jpg,.jpeg,.png,.gif,.txt"
+            />
+          </div>
+          <div id="uploadProgress" style="display: none; margin-top: 8px">
+            <div class="upload-bar-track">
+              <div class="upload-bar-fill" id="uploadProgressFill"></div>
+            </div>
+            <div class="upload-pct" id="uploadProgressTxt">Uploading... 0%</div>
+          </div>
+          <div class="form-group">
+            <label>Description</label
+            ><textarea
+              id="resDesc"
+              placeholder="Brief description..."
+            ></textarea>
+          </div>
+          <button class="btn-primary" onclick="saveResource()">
+            <span>Share Resource</span><i class="fa-solid fa-check"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>

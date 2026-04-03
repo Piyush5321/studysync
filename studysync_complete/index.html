@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>StudySync — Sign In</title>
+  <link rel="stylesheet" href="css/auth.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+  <div class="bg-canvas">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <canvas id="particleCanvas"></canvas>
+  </div>
+
+  <div class="auth-container">
+    <div class="auth-left">
+      <div class="brand">
+        <div class="brand-icon"><i class="fa-solid fa-bolt"></i></div>
+        <span class="brand-name">StudySync</span>
+      </div>
+      <div class="hero-content">
+        <div class="badge-tag"><i class="fa-solid fa-circle-check"></i> Now with AI Planning</div>
+        <h1>Sync your team.<br/><em class="accent">Master your goals.</em></h1>
+        <p>A smart collaborative workspace built for student groups — plan together, track progress, achieve more.</p>
+        <div class="feature-list">
+          <div class="feat-item"><div class="feat-dot" style="--c:#ff6b35"></div><span>Smart daily study plans based on deadlines</span></div>
+          <div class="feat-item"><div class="feat-dot" style="--c:#4ecdc4"></div><span>Kanban boards with drag-and-drop tasks</span></div>
+          <div class="feat-item"><div class="feat-dot" style="--c:#a78bfa"></div><span>Gamified leaderboard &amp; burnout detection</span></div>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat"><span class="stat-num counter" data-target="12847">0</span><span class="stat-label">Students</span></div>
+        <div class="stat-div"></div>
+        <div class="stat"><span class="stat-num">98%</span><span class="stat-label">Task Rate</span></div>
+        <div class="stat-div"></div>
+        <div class="stat"><span class="stat-num">4.9★</span><span class="stat-label">Rated</span></div>
+      </div>
+    </div>
+
+    <div class="auth-right">
+      <div class="auth-card">
+        <div class="tab-switcher">
+          <button class="tab-btn active" id="loginTab" onclick="switchTab('login')">Sign In</button>
+          <button class="tab-btn" id="signupTab" onclick="switchTab('signup')">Sign Up</button>
+          <div class="tab-slider" id="tabSlider"></div>
+        </div>
+
+        <div class="form-panel active" id="loginPanel">
+          <p class="form-greeting">Welcome back 👋</p>
+          <div class="form-group">
+            <label>Email</label>
+            <div class="input-wrap">
+              <i class="fa-regular fa-envelope inp-icon"></i>
+              <input type="email" id="loginEmail" placeholder="you@university.edu"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div class="input-wrap">
+              <i class="fa-solid fa-lock inp-icon"></i>
+              <input type="password" id="loginPassword" placeholder="••••••••"/>
+              <button class="eye-btn" onclick="togglePass('loginPassword',this)"><i class="fa-regular fa-eye"></i></button>
+            </div>
+            <a class="forgot" href="#">Forgot password?</a>
+          </div>
+          <button class="btn-primary" id="loginBtn" onclick="handleLogin()">
+            <span class="btn-text">Sign In</span>
+            <div class="btn-loader hidden"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
+            <i class="fa-solid fa-arrow-right btn-arrow"></i>
+          </button>
+          <div class="or-divider"><span>or continue with</span></div>
+          <button class="btn-google" onclick="handleGoogleLogin()">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G"/>
+            Google
+          </button>
+        </div>
+
+        <div class="form-panel" id="signupPanel">
+          <p class="form-greeting">Create account 🚀</p>
+          <div class="form-group">
+            <label>Full Name</label>
+            <div class="input-wrap">
+              <i class="fa-regular fa-user inp-icon"></i>
+              <input type="text" id="signupName" placeholder="Alex Johnson"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <div class="input-wrap">
+              <i class="fa-regular fa-envelope inp-icon"></i>
+              <input type="email" id="signupEmail" placeholder="you@university.edu"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <div class="input-wrap">
+              <i class="fa-solid fa-lock inp-icon"></i>
+              <input type="password" id="signupPassword" placeholder="Min 8 characters"/>
+              <button class="eye-btn" onclick="togglePass('signupPassword',this)"><i class="fa-regular fa-eye"></i></button>
+            </div>
+          </div>
+          <button class="btn-primary" id="signupBtn" onclick="handleSignup()">
+            <span class="btn-text">Create Account</span>
+            <div class="btn-loader hidden"><i class="fa-solid fa-circle-notch fa-spin"></i></div>
+            <i class="fa-solid fa-arrow-right btn-arrow"></i>
+          </button>
+          <div class="or-divider"><span>or continue with</span></div>
+          <button class="btn-google" onclick="handleGoogleLogin()">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G"/>
+            Google
+          </button>
+        </div>
+
+        <div id="authMessage" class="auth-msg hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/firebase-init.js"></script>
+  <script type="module" src="js/auth.js"></script>
+  <script src="js/auth-ui.js"></script>
+</body>
+</html>
