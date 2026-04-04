@@ -19,9 +19,10 @@ async function ensureUserDoc(user, name) {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
+    const userName = name || user.displayName || user.email?.split('@')[0] || "User";
     await setDoc(ref, {
       uid: user.uid,
-      name: name || user.displayName || "Student",
+      name: userName,
       email: user.email,
       avatar: user.photoURL || "",
       points: 0,
@@ -34,7 +35,7 @@ async function ensureUserDoc(user, name) {
   }
 }
 
-window.handleLogin = async function() {
+window.handleLogin = async function () {
   const email = document.getElementById("loginEmail").value.trim();
   const pass = document.getElementById("loginPassword").value;
   if (!email || !pass) return showMsg("Please fill all fields", "error");
@@ -50,7 +51,7 @@ window.handleLogin = async function() {
   }
 };
 
-window.handleSignup = async function() {
+window.handleSignup = async function () {
   const name = document.getElementById("signupName").value.trim();
   const email = document.getElementById("signupEmail").value.trim();
   const pass = document.getElementById("signupPassword").value;
@@ -69,7 +70,7 @@ window.handleSignup = async function() {
   }
 };
 
-window.handleGoogleLogin = async function() {
+window.handleGoogleLogin = async function () {
   try {
     showMsg("Opening Google...", "info");
     const cred = await signInWithPopup(auth, provider);
@@ -77,8 +78,13 @@ window.handleGoogleLogin = async function() {
     showMsg("Signed in! Redirecting...", "success");
     setTimeout(() => window.location.href = "dashboard.html", 900);
   } catch (e) {
-    if (e.code !== 'auth/popup-closed-by-user') showMsg(firebaseErrMsg(e.code), "error");
-    else showMsg("Google login cancelled.", "info");
+    console.error("Google login error:", e.code, e.message);
+    if (e.code !== 'auth/popup-closed-by-user') {
+      const errorMsg = firebaseErrMsg(e.code);
+      showMsg(errorMsg + " (Code: " + e.code + ")", "error");
+    } else {
+      showMsg("Google login cancelled.", "info");
+    }
   }
 };
 
