@@ -160,7 +160,14 @@ function toast(msg, type = 'info') {
   setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+function openModal(id) {
+  document.getElementById(id).classList.remove('hidden');
+  // Clear doubt solver chat when opening
+  if (id === 'doubtSolverModal') {
+    const chatBox = document.getElementById('doubtChatBox');
+    if (chatBox) chatBox.innerHTML = '';
+  }
+}
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 window.openModal = openModal;
 window.closeModal = closeModal;

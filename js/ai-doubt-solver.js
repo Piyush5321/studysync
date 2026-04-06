@@ -1,7 +1,5 @@
 // js/ai-doubt-solver.js - AI Doubt Solver Chat Interface
 
-import { db } from './firebase-init.js';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { AI_CONFIG } from './ai-config.js';
 
 let currentUser = null;
@@ -9,19 +7,6 @@ let doubtHistory = [];
 
 export function initDoubtSolver(user) {
     currentUser = user;
-    loadDoubtHistory();
-}
-
-function loadDoubtHistory() {
-    if (!currentUser) return;
-    const q = query(
-        collection(db, "users", currentUser.uid, "doubts"),
-        orderBy("createdAt", "asc")
-    );
-    onSnapshot(q, (snap) => {
-        doubtHistory = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        renderDoubtChat();
-    });
 }
 
 export async function askDoubt(question) {
@@ -36,28 +21,24 @@ export async function askDoubt(question) {
         return;
     }
 
+    // Clear previous errors
+    const chatBox = document.getElementById('doubtChatBox');
+    if (chatBox) {
+        const errors = chatBox.querySelectorAll('.doubt-error');
+        errors.forEach(err => err.remove());
+    }
+
     // Add user message to UI immediately
     const userMsg = { role: 'user', content: question, createdAt: new Date(), timestamp: Date.now() };
     addMessageToUI(userMsg);
+    doubtHistory.push(userMsg);
 
     try {
         showDoubtLoading(true);
         const answer = await callOpenRouterAPI(question, apiKey);
         const aiMsg = { role: 'assistant', content: answer, createdAt: new Date(), timestamp: Date.now() };
         addMessageToUI(aiMsg);
-
-        // Try to save to Firebase, but don't fail if it doesn't work
-        if (currentUser && currentUser.uid) {
-            try {
-                await addDoc(collection(db, "users", currentUser.uid, "doubts"), {
-                    question, answer, createdAt: serverTimestamp(), helpful: null
-                });
-            } catch (firebaseError) {
-                console.warn("Could not save to Firebase:", firebaseError);
-                // Continue anyway - chat still works
-            }
-        }
-
+        doubtHistory.push(aiMsg);
         showDoubtLoading(false);
     } catch (error) {
         console.error("AI Error:", error);
@@ -136,20 +117,6 @@ function showDoubtError(msg) {
     errEl.innerHTML = msg;
     chatBox.appendChild(errEl);
     chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function renderDoubtChat() {
-    const chatBox = document.getElementById('doubtChatBox');
-    if (!chatBox) return;
-
-    chatBox.innerHTML = '';
-    doubtHistory.forEach(msg => {
-        addMessageToUI({
-            role: msg.question ? 'user' : 'assistant',
-            content: msg.question || msg.answer,
-            createdAt: msg.createdAt
-        });
-    });
 }
 
 function escapeHtml(text) {
