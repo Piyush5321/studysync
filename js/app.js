@@ -46,19 +46,26 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 async function loadUserDoc() {
-  const ref = doc(db, "users", currentUser.uid);
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    userDoc = snap.data();
-  } else {
+  try {
+    const ref = doc(db, "users", currentUser.uid);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      userDoc = snap.data();
+    } else {
+      userDoc = { name: currentUser.displayName || "Student", email: currentUser.email, points: 0, tasksCompleted: 0, groupId: null, streak: 0, lastLoginDate: null };
+      await setDoc(ref, { ...userDoc, uid: currentUser.uid, joinedAt: serverTimestamp(), lastActive: serverTimestamp() });
+    }
+    await updateLoginStreak();
+  } catch (error) {
+    console.error("Error loading user doc:", error);
+    // Set default user doc if there's an error
     userDoc = { name: currentUser.displayName || "Student", email: currentUser.email, points: 0, tasksCompleted: 0, groupId: null, streak: 0, lastLoginDate: null };
-    await setDoc(ref, { ...userDoc, uid: currentUser.uid, joinedAt: serverTimestamp(), lastActive: serverTimestamp() });
   }
-  await updateLoginStreak();
 }
 
 async function updateLoginStreak() {
   try {
+    if (!userDoc) return;
     const today = new Date().toDateString();
     if (userDoc.lastLoginDate !== today) {
       const yesterday = new Date(Date.now() - 86400000).toDateString();
@@ -67,7 +74,9 @@ async function updateLoginStreak() {
       userDoc.lastLoginDate = today;
       await updateDoc(doc(db, "users", currentUser.uid), { streak, lastLoginDate: today, lastActive: serverTimestamp() });
     }
-  } catch (e) { }
+  } catch (e) {
+    console.warn("Could not update login streak:", e);
+  }
 }
 
 function initUI() {
@@ -165,7 +174,12 @@ function openModal(id) {
   // Clear doubt solver chat when opening
   if (id === 'doubtSolverModal') {
     const chatBox = document.getElementById('doubtChatBox');
-    if (chatBox) chatBox.innerHTML = '';
+    if (chatBox) {
+      chatBox.innerHTML = '';
+      // Clear any error messages
+      const errors = chatBox.querySelectorAll('.doubt-error');
+      errors.forEach(err => err.remove());
+    }
   }
 }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }

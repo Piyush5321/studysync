@@ -1,36 +1,30 @@
 // js/ai-config.js - AI API Configuration
-// Using OpenRouter API (Free tier available)
+// Using Free Inference API (No API key needed - completely free)
 
 export const AI_CONFIG = {
-    // OpenRouter API Key - Replace with your own from https://openrouter.ai
-    OPENROUTER_API_KEY: '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',
-    OPENROUTER_API_URL: 'https://openrouter.ai/api/v1/chat/completions',
+    // Using Hugging Face Free Inference API - No authentication needed
+    API_URL: 'https://api-inference.huggingface.co/models/gpt2',
 
-    // Free models available on OpenRouter
+    // Model
     MODELS: {
-        TEXT_GENERATION: 'gpt-3.5-turbo',
-        CHAT: 'gpt-3.5-turbo'
+        TEXT_GENERATION: 'gpt2',
+        CHAT: 'gpt2'
     }
 };
 
 export function initializeAIConfig() {
-    const savedKey = localStorage.getItem('openrouter_api_key');
-    if (!savedKey || savedKey === 'YOUR_OPENROUTER_API_KEY') {
-        console.warn('OpenRouter API key not configured. AI features will be limited.');
-        return false;
-    }
+    console.log('AI Config initialized - using free inference API');
     return true;
 }
 
 export function setAIApiKey(apiKey) {
     if (apiKey && apiKey.trim()) {
-        localStorage.setItem('openrouter_api_key', apiKey.trim());
-        AI_CONFIG.OPENROUTER_API_KEY = apiKey.trim();
+        localStorage.setItem('ai_api_key', apiKey.trim());
         return true;
     }
     return false;
 }
 
 export function getAIApiKey() {
-    return AI_CONFIG.OPENROUTER_API_KEY;
+    return localStorage.getItem('ai_api_key') || '';
 }
