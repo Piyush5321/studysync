@@ -47,13 +47,15 @@ export async function askDoubt(question) {
         addMessageToUI(aiMsg);
 
         // Try to save to Firebase, but don't fail if it doesn't work
-        try {
-            await addDoc(collection(db, "users", currentUser.uid, "doubts"), {
-                question, answer, createdAt: serverTimestamp(), helpful: null
-            });
-        } catch (firebaseError) {
-            console.warn("Could not save to Firebase:", firebaseError);
-            // Continue anyway - chat still works
+        if (currentUser && currentUser.uid) {
+            try {
+                await addDoc(collection(db, "users", currentUser.uid, "doubts"), {
+                    question, answer, createdAt: serverTimestamp(), helpful: null
+                });
+            } catch (firebaseError) {
+                console.warn("Could not save to Firebase:", firebaseError);
+                // Continue anyway - chat still works
+            }
         }
 
         showDoubtLoading(false);
