@@ -8,12 +8,12 @@ import { doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/fi
 
 const provider = new GoogleAuthProvider();
 
-// Redirect if already logged in
-onAuthStateChanged(auth, (user) => {
-  if (user && window.location.pathname.includes('index')) {
-    window.location.href = 'dashboard.html';
-  }
-});
+// Redirect if already logged in - DISABLED to allow manual login
+// onAuthStateChanged(auth, (user) => {
+//   if (user && window.location.pathname.includes('index')) {
+//     window.location.href = 'dashboard.html';
+//   }
+// });
 
 async function ensureUserDoc(user, name) {
   const ref = doc(db, "users", user.uid);

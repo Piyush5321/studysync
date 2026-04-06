@@ -60,6 +60,18 @@
         <a href="#" class="nav-item" onclick="switchPage('resources', this)"
           ><i class="fa-solid fa-folder-open"></i><span>Resources</span></a
         >
+        <a href="#" class="nav-item" onclick="switchPage('mytasks', this)"
+          ><i class="fa-solid fa-circle-play"></i><span>My Tasks</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('livestudy', this)"
+          ><i class="fa-solid fa-users-line"></i><span>Live Study</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('discussion', this)"
+          ><i class="fa-solid fa-comments"></i><span>Group Discussion</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('manage-doubts', this)"
+          ><i class="fa-solid fa-list"></i><span>Manage Doubts</span></a
+        >
       </nav>
       <div class="sidebar-bottom">
         <div class="user-chip" id="userChip">
@@ -407,6 +419,96 @@
           </div>
         </div>
         <div class="resource-grid" id="resourceGrid"></div>
+      </div>
+
+      <!-- MY TASKS PAGE -->
+      <div class="page" id="page-mytasks">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <div class="task-filters">
+              <button class="filter-btn active" onclick="filterMyTasks('all', this)">All</button>
+              <button class="filter-btn" onclick="filterMyTasks('studying', this)">Studying</button>
+              <button class="filter-btn" onclick="filterMyTasks('paused', this)">Paused</button>
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <div class="study-stats">
+              <span id="todayStudyTime">Today: 0h 0m</span>
+            </div>
+          </div>
+        </div>
+        <div class="my-tasks-grid" id="myTasksGrid"></div>
+      </div>
+
+      <!-- LIVE STUDY PAGE -->
+      <div class="page" id="page-livestudy">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <div class="live-status">
+              <span class="live-indicator"><i class="fa-solid fa-circle"></i> Live</span>
+              <span id="activeStudentsCount">0 studying</span>
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn-accent" onclick="refreshLiveStudy()">
+              <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+          </div>
+        </div>
+        <div class="live-study-grid" id="liveStudyGrid"></div>
+      </div>
+
+      <!-- GROUP DISCUSSION PAGE -->
+      <div class="page" id="page-discussion">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <h3 style="margin: 0; font-size: 14px; color: var(--text-muted);">Post a Doubt</h3>
+          </div>
+        </div>
+        
+        <div class="discussion-post-form card">
+          <div class="form-group">
+            <label>Select Task</label>
+            <select id="discussionTaskSelect" class="discussion-select">
+              <option value="">Choose a task...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Your Doubt</label>
+            <textarea 
+              id="discussionDoubtInput" 
+              placeholder="Describe your doubt or question..." 
+              class="discussion-textarea"
+              rows="4"
+            ></textarea>
+          </div>
+          <button class="btn-accent" onclick="window.postDoubt()">
+            <i class="fa-solid fa-paper-plane"></i> Post Doubt
+          </button>
+        </div>
+
+        <div id="discussionContainer" class="discussion-container"></div>
+      </div>
+
+      <!-- MANAGE DOUBTS PAGE -->
+      <div class="page" id="page-manage-doubts">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <div class="task-filters">
+              <button class="filter-btn active" onclick="filterDoubts('all', this)">All</button>
+              <button class="filter-btn" onclick="filterDoubts('open', this)">Open</button>
+              <button class="filter-btn" onclick="filterDoubts('answered', this)">Answered</button>
+              <button class="filter-btn" onclick="filterDoubts('mine', this)">My Doubts</button>
+            </div>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn-accent" onclick="window.renderDiscussions()">
+              <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+          </div>
+        </div>
+
+        <div id="manageDoubtsContainer" class="manage-doubts-container"></div>
       </div>
     </main>
 
@@ -768,6 +870,8 @@
       </div>
     </div>
 
+    <script src="js/study-tracker.js"></script>
+    <script src="js/group-discussion.js"></script>
     <script type="module" src="js/app.js"></script>
   </body>
 </html>

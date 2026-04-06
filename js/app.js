@@ -6,11 +6,11 @@ import {
   getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
   collection, query, where, onSnapshot, orderBy, serverTimestamp, getDocs
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getDatabase, ref, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 import { initDoubtSolver, askDoubt } from './ai-doubt-solver.js';
 import { prioritizeTasks, displayPrioritization } from './ai-task-prioritizer.js';
 import { analyzePredictivePerformance, renderPredictions } from './ai-predictions.js';
 import { initializeAIConfig, setAIApiKey, getAIApiKey } from './ai-config.js';
-// Storage import removed - using Firestore Base64 encoding instead
 
 // ⚠️ Replace with your actual Firebase project credentials
 const firebaseConfig = {
@@ -25,6 +25,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const rtdb = getDatabase(app);
+
+// Export Firebase modules to window for study-tracker.js and group-discussion.js
+window.firebaseModules = {
+  ref, set, remove, onValue,
+  collection, addDoc, updateDoc, doc, serverTimestamp, query, where, onSnapshot, orderBy, getDoc, setDoc, deleteDoc, getDocs
+};
 
 const POINTS = {
   TASK_ADD: 5, TASK_COMPLETE: 20, EARLY_COMPLETION: 10,
@@ -97,6 +104,11 @@ function initUI() {
   renderCalendar();
   initializeAIConfig();
   initDoubtSolver(currentUser);
+  // Initialize study tracker
+  if (window.initStudyTracker) {
+    window.initStudyTracker(rtdb, currentUser, userDoc.groupId, [], []);
+  }
+  // Group discussion will be initialized after group members are loaded
 }
 
 function setupListeners() {
@@ -104,7 +116,24 @@ function setupListeners() {
   const gid = userDoc.groupId;
   onSnapshot(query(collection(db, "groups", gid, "tasks"), orderBy("createdAt", "desc")), snap => {
     tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    window.tasksGlobal = tasks;
     renderKanban(); renderTaskSummary(); renderDashboardTaskBadge(); renderSmartPlanner(); renderProgressCharts();
+    // Update study tracker with new tasks
+    if (window.updateStudyTrackerTasks) {
+      window.updateStudyTrackerTasks(tasks, groupMembers);
+    }
+    // Update group discussion with new tasks
+    if (window.updateGroupDiscussionData) {
+      window.updateGroupDiscussionData(tasks, groupMembers);
+    }
+    // Populate discussion task dropdown
+    populateDiscussionTaskDropdown(tasks);
+    if (window.renderMyTasks) {
+      window.renderMyTasks();
+    }
+    if (window.renderLiveStudy) {
+      window.renderLiveStudy();
+    }
   });
   onSnapshot(query(collection(db, "groups", gid, "events"), orderBy("date")), snap => {
     events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -138,6 +167,36 @@ async function loadGroupMembers(gid) {
   groupMembers = snap.docs.map(d => d.data());
   document.getElementById('sidebarGroupMembers').textContent = groupMembers.length + ' members';
   populateAssigneeDropdown(); renderLeaderboard(); renderProgressCharts(); renderBurnoutMonitor();
+
+  // Initialize study tracker with current data
+  if (window.initStudyTracker) {
+    window.initStudyTracker(rtdb, currentUser, userDoc.groupId, tasks, groupMembers);
+  }
+
+  // Initialize group discussion with correct parameters
+  if (window.initGroupDiscussion) {
+    window.initGroupDiscussion(db, currentUser, userDoc.groupId, tasks, groupMembers);
+  }
+}
+
+// ===== MY TASKS RENDER =====
+// Delegated to study-tracker.js
+
+// ===== LIVE STUDY RENDER =====
+// Delegated to study-tracker.js
+
+function formatTimeMs(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 function switchPage(name, el) {
@@ -145,14 +204,26 @@ function switchPage(name, el) {
   document.getElementById('page-' + name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (el) el.classList.add('active');
-  const titles = { dashboard: 'Dashboard', calendar: 'Calendar', tasks: 'Tasks', progress: 'Progress', leaderboard: 'Leaderboard', resources: 'Resources' };
-  const subs = { dashboard: 'Overview', calendar: 'Schedule & Events', tasks: 'Task Manager', progress: 'Analytics & Insights', leaderboard: 'Rankings & Points', resources: 'Shared Files & Links' };
+  const titles = { dashboard: 'Dashboard', calendar: 'Calendar', tasks: 'Tasks', progress: 'Progress', leaderboard: 'Leaderboard', resources: 'Resources', mytasks: 'My Tasks', livestudy: 'Live Study', discussion: 'Group Discussion', 'manage-doubts': 'Manage Doubts' };
+  const subs = { dashboard: 'Overview', calendar: 'Schedule & Events', tasks: 'Task Manager', progress: 'Analytics & Insights', leaderboard: 'Rankings & Points', resources: 'Shared Files & Links', mytasks: 'Track Your Study Time', livestudy: 'Real-time Group Activity', discussion: 'Collaborate & Solve Doubts', 'manage-doubts': 'View & Manage All Doubts' };
   document.getElementById('pageTitle').textContent = titles[name] || name;
   document.getElementById('breadcrumb').textContent = subs[name] || '';
   if (name === 'calendar') renderCalendar();
   if (name === 'leaderboard') renderLeaderboard();
   if (name === 'progress') renderProgressCharts();
   if (name === 'resources') renderResources();
+  if (name === 'mytasks') {
+    if (window.renderMyTasks) window.renderMyTasks();
+  }
+  if (name === 'livestudy') {
+    if (window.renderLiveStudy) window.renderLiveStudy();
+  }
+  if (name === 'discussion') {
+    if (window.renderDiscussions) window.renderDiscussions();
+  }
+  if (name === 'manage-doubts') {
+    if (window.renderManageDoubts) window.renderManageDoubts('all');
+  }
 }
 window.switchPage = switchPage;
 
@@ -162,6 +233,14 @@ window.toggleSidebar = function () {
 };
 
 window.handleLogout = async function () { await signOut(auth); window.location.href = 'index.html'; };
+
+// Export functions to window
+// These are delegated to study-tracker.js
+window.refreshLiveStudy = function () {
+  if (window.renderLiveStudy) {
+    window.renderLiveStudy();
+  }
+};
 
 function toast(msg, type = 'info') {
   const el = document.getElementById('toast');
@@ -376,6 +455,18 @@ function populateAssigneeDropdown() {
   const sel = document.getElementById('tskAssign'); if (!sel) return;
   sel.innerHTML = '<option value="">Unassigned</option>';
   groupMembers.forEach(m => { const o = document.createElement('option'); o.value = m.uid; o.textContent = m.name + (m.uid === currentUser.uid ? ' (you)' : ''); sel.appendChild(o); });
+}
+
+function populateDiscussionTaskDropdown(tasksList) {
+  const sel = document.getElementById('discussionTaskSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Choose a task...</option>';
+  tasksList.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = t.title;
+    sel.appendChild(o);
+  });
 }
 
 window.saveTask = async function () {
