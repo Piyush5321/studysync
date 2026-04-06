@@ -116,6 +116,10 @@ function initUI() {
   if (window.initQuizGenerator) {
     window.initQuizGenerator();
   }
+  // Initialize Task Proof Verification
+  if (window.initTaskProofVerification) {
+    window.initTaskProofVerification(db, currentUser, userDoc.groupId);
+  }
   // Group discussion will be initialized after group members are loaded
 }
 
@@ -547,15 +551,26 @@ function renderTaskCard(t) {
 window.toggleTaskComplete = async function (id, checked) {
   try {
     const task = tasks.find(t => t.id === id); if (!task) return;
-    const newCol = checked ? 'completed' : 'todo';
-    await updateDoc(doc(db, "groups", userDoc.groupId, "tasks", id), { column: newCol, updatedAt: serverTimestamp() });
+
     if (checked) {
-      const pts = task.points || POINTS.TASK_COMPLETE;
-      const bonus = task.deadline && new Date(task.deadline) > new Date() ? POINTS.EARLY_COMPLETION : 0;
-      await awardPoints(pts + bonus, true);
-      await logActivity(`🏆 ${userDoc.name} completed: ${task.title}`, 'complete');
-      toast(`Task done! +${pts + bonus} pts${bonus ? ' (Early bonus!)' : ''} 🎉`, "success");
-    } else { toast("Task moved back to To Do", "info"); }
+      // Open proof verification modal instead of direct completion
+      if (window.openProofModal) {
+        window.openProofModal(id, task.title, task.description || '');
+      } else {
+        // Fallback if proof verification not available
+        const newCol = 'completed';
+        await updateDoc(doc(db, "groups", userDoc.groupId, "tasks", id), { column: newCol, updatedAt: serverTimestamp() });
+        const pts = task.points || POINTS.TASK_COMPLETE;
+        const bonus = task.deadline && new Date(task.deadline) > new Date() ? POINTS.EARLY_COMPLETION : 0;
+        await awardPoints(pts + bonus, true);
+        await logActivity(`🏆 ${userDoc.name} completed: ${task.title}`, 'complete');
+        toast(`Task done! +${pts + bonus} pts${bonus ? ' (Early bonus!)' : ''} 🎉`, "success");
+      }
+    } else {
+      const newCol = 'todo';
+      await updateDoc(doc(db, "groups", userDoc.groupId, "tasks", id), { column: newCol, updatedAt: serverTimestamp() });
+      toast("Task moved back to To Do", "info");
+    }
   } catch (e) { toast("Error", "error"); }
 };
 
@@ -967,6 +982,92 @@ window.analyzeTasks = async function () {
 // AI Settings
 window.openAISettings = function () {
   openModal('aiSettingsModal');
+  // Load saved HF token
+  var savedToken = localStorage.getItem('hf_token') || '';
+  var input = document.getElementById('hfTokenInput');
+  if (input) {
+    input.value = savedToken;
+  }
+};
+
+// Save HuggingFace Token
+window.saveHFToken = function () {
+  var input = document.getElementById('hfTokenInput');
+  var token = input.value.trim();
+
+  if (!token) {
+    alert('Please enter a token');
+    return;
+  }
+
+  if (!token.startsWith('hf_')) {
+    alert('Invalid token format. Token should start with "hf_"');
+    return;
+  }
+
+  localStorage.setItem('hf_token', token);
+
+  var statusDiv = document.getElementById('hfTokenStatus');
+  if (statusDiv) {
+    statusDiv.innerHTML = '<div style="background: rgba(74, 222, 128, 0.15); border: 1px solid #4ade80; color: #4ade80; padding: 12px; border-radius: 6px; font-size: 12px;"><i class="fa-solid fa-check"></i> Token saved successfully!</div>';
+  }
+
+  setTimeout(function () {
+    if (statusDiv) statusDiv.innerHTML = '';
+  }, 3000);
+};
+
+// Test HuggingFace Connection
+window.testHFToken = function () {
+  var input = document.getElementById('hfTokenInput');
+  var token = input.value.trim();
+
+  if (!token) {
+    alert('Please enter a token first');
+    return;
+  }
+
+  // Validate token format
+  if (!token.startsWith('hf_')) {
+    var statusDiv = document.getElementById('hfTokenStatus');
+    if (statusDiv) {
+      statusDiv.innerHTML = '<div style="background: rgba(248, 113, 113, 0.15); border: 1px solid #f87171; color: #f87171; padding: 12px; border-radius: 6px; font-size: 12px;"><i class="fa-solid fa-xmark"></i> ✗ Invalid format! Token must start with "hf_"</div>';
+    }
+    return;
+  }
+
+  var statusDiv = document.getElementById('hfTokenStatus');
+  if (statusDiv) {
+    statusDiv.innerHTML = '<div style="background: rgba(96, 165, 250, 0.15); border: 1px solid #60a5fa; color: #60a5fa; padding: 12px; border-radius: 6px; font-size: 12px;"><i class="fa-solid fa-spinner"></i> Testing connection...</div>';
+  }
+
+  // Test API call
+  fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1", {
+    headers: { Authorization: "Bearer " + token },
+    method: "POST",
+    body: JSON.stringify({ inputs: "Test" })
+  })
+    .then(function (response) {
+      console.log("HF API Response Status:", response.status);
+      if (response.ok || response.status === 429 || response.status === 503) {
+        // 429 = rate limited, 503 = model loading, but token is valid
+        localStorage.setItem('hf_token', token);
+        if (statusDiv) {
+          statusDiv.innerHTML = '<div style="background: rgba(74, 222, 128, 0.15); border: 1px solid #4ade80; color: #4ade80; padding: 12px; border-radius: 6px; font-size: 12px;"><i class="fa-solid fa-check"></i> ✓ Token is valid and working!</div>';
+        }
+      } else if (response.status === 401) {
+        throw new Error('Unauthorized - Token is invalid or expired');
+      } else {
+        throw new Error('HTTP ' + response.status);
+      }
+    })
+    .catch(function (error) {
+      console.error("HF Token Test Error:", error);
+      if (statusDiv) {
+        var errorMsg = error.message || 'Unknown error';
+        statusDiv.innerHTML = '<div style="background: rgba(248, 113, 113, 0.15); border: 1px solid #f87171; color: #f87171; padding: 12px; border-radius: 6px; font-size: 12px;"><i class="fa-solid fa-xmark"></i> ✗ Error: ' + escapeHtml(errorMsg) + '<br><small>Check browser console (F12) for details</small></div>';
+      }
+    });
 };
 
 // Render predictions on dashboard

@@ -612,6 +612,62 @@
       </div>
     </main>
 
+    <!-- TASK PROOF VERIFICATION MODAL -->
+    <div class="modal-overlay hidden" id="proofVerificationModal">
+      <div class="modal-card proof-modal-card">
+        <div class="modal-header">
+          <span>Submit Task Proof</span>
+          <button onclick="window.closeProofModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="proof-task-info">
+            <h4 id="proofTaskTitle">Task Title</h4>
+            <p style="color: var(--text-muted); font-size: 12px;">Upload proof and explain what you completed</p>
+          </div>
+
+          <div class="form-group">
+            <label>Upload Proof Screenshot</label>
+            <div class="proof-upload-area">
+              <input 
+                type="file" 
+                id="proofImageInput" 
+                accept="image/*" 
+                onchange="window.handleProofImageUpload(event)"
+                class="proof-file-input"
+              />
+              <div class="proof-upload-placeholder">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <p>Click to upload or drag image here</p>
+                <small>PNG, JPG, GIF up to 5MB</small>
+              </div>
+            </div>
+            <div id="proofImagePreview" class="proof-image-preview"></div>
+          </div>
+
+          <div class="form-group">
+            <label>Explanation (What did you complete?)</label>
+            <textarea 
+              id="proofExplanation" 
+              placeholder="Describe what you completed and how it relates to the task..."
+              class="proof-textarea"
+              rows="4"
+            ></textarea>
+            <small style="color: var(--text-muted);">Minimum 10 characters</small>
+          </div>
+
+          <div id="proofUploadStatus" class="proof-upload-status"></div>
+
+          <button id="proofSubmitBtn" class="btn-primary" onclick="window.submitProof()" style="width: 100%; margin-top: 16px;">
+            <span>Submit Proof</span>
+            <i class="fa-solid fa-check"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- QUIZ MODAL -->
     <div class="modal-overlay hidden" id="quizModal">
       <div class="modal-card quiz-modal-card">
@@ -1024,7 +1080,7 @@
           <button class="modal-close" onclick="closeModal('aiSettingsModal')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
-          <div style="padding: 12px; background: var(--surface2); border-radius: 8px; font-size: 13px; color: var(--text);">
+          <div style="padding: 12px; background: var(--surface2); border-radius: 8px; font-size: 13px; color: var(--text); margin-bottom: 20px;">
             <strong>✅ API Key Configured</strong><br>
             <p style="margin-top: 8px; color: var(--text-muted);">
               Your OpenRouter API key is set up and ready to use.
@@ -1035,14 +1091,48 @@
               • <strong>Prioritize:</strong> Get AI recommendations on which tasks to do first
             </p>
           </div>
+
+          <div style="border-top: 1px solid var(--border); padding-top: 20px;">
+            <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--text);">HuggingFace API Key (for Task Proof Verification)</h4>
+            <p style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-muted);">
+              Used for AI-powered task proof validation. Get your free token at <a href="https://huggingface.co/settings/tokens" target="_blank" style="color: var(--accent);">huggingface.co/settings/tokens</a>
+            </p>
+            
+            <div class="form-group">
+              <label>API Token</label>
+              <input 
+                type="password" 
+                id="hfTokenInput" 
+                placeholder="hf_..." 
+                class="quiz-input"
+                style="font-family: monospace; font-size: 12px;"
+              />
+              <small style="color: var(--text-muted); margin-top: 4px; display: block;">
+                Your token is stored locally in your browser and never sent to our servers
+              </small>
+            </div>
+
+            <div class="form-row" style="gap: 8px;">
+              <button class="btn-primary" onclick="saveHFToken()" style="flex: 1;">
+                <i class="fa-solid fa-save"></i> Save Token
+              </button>
+              <button class="btn-accent" onclick="testHFToken()" style="flex: 1;">
+                <i class="fa-solid fa-flask"></i> Test Connection
+              </button>
+            </div>
+
+            <div id="hfTokenStatus" style="margin-top: 12px;"></div>
+          </div>
         </div>
       </div>
     </div>
 
     <script src="js/study-tracker.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="js/group-discussion.js"></script>
     <script src="js/smart-learn.js"></script>
     <script src="js/quiz-generator.js"></script>
+    <script src="js/task-proof-verification.js"></script>
     <script type="module" src="js/app.js"></script>
   </body>
 </html>
