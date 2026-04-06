@@ -86,6 +86,19 @@
             <i class="fa-solid fa-search"></i
             ><input type="text" placeholder="Search tasks, events..." />
           </div>
+          <button class="ai-btn" onclick="openModal('doubtSolverModal')" title="Ask AI">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Ask AI
+          </button>
+          <button class="ai-btn" onclick="openModal('taskPrioritizerModal')" title="Prioritize Tasks">
+            <i class="fa-solid fa-brain"></i> Prioritize
+          </button>
+          <button
+            class="icon-btn"
+            onclick="openAISettings()"
+            title="AI Settings"
+          >
+            <i class="fa-solid fa-microchip"></i>
+          </button>
           <button
             class="icon-btn"
             onclick="openGroupModal()"
@@ -203,6 +216,7 @@
             <div id="leaderPreview" class="leader-list"></div>
           </div>
         </div>
+        <div id="predictionsContainer" style="margin-top: 20px;"></div>
       </div>
 
       <!-- CALENDAR PAGE -->
@@ -671,6 +685,89 @@
     </div>
 
     <div class="toast" id="toast"></div>
+
+    <!-- AI DOUBT SOLVER MODAL -->
+    <div class="modal-overlay hidden" id="doubtSolverModal">
+      <div class="modal-card" style="max-width: 700px; height: 80vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+          <h2 style="margin: 0; font-size: 18px;">🤖 AI Doubt Solver</h2>
+          <button onclick="closeModal('doubtSolverModal')" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 20px; padding: 0;">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        
+        <!-- Chat Messages Area -->
+        <div id="doubtChatBox" style="flex: 1; overflow-y: auto; padding: 20px; background: var(--surface2); display: flex; flex-direction: column; gap: 12px;"></div>
+        
+        <!-- Loading Indicator -->
+        <div id="doubtLoader" style="display: none; padding: 12px; text-align: center; color: var(--text-muted); background: var(--surface2); border-top: 1px solid var(--border);">
+          <i class="fa-solid fa-spinner fa-spin"></i> AI is thinking...
+        </div>
+        
+        <!-- Input Area - CLEAR AND VISIBLE -->
+        <div style="padding: 16px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center;">
+          <input 
+            type="text" 
+            id="doubtInput" 
+            placeholder="Ask your question..." 
+            style="flex: 1; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); color: var(--text); font-size: 14px; font-family: 'DM Sans', sans-serif;"
+            onkeypress="if(event.key==='Enter') window.submitDoubt()"
+          />
+          <button 
+            onclick="window.submitDoubt()" 
+            style="padding: 12px 20px; background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px;"
+          >
+            <i class="fa-solid fa-paper-plane"></i> Send
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI TASK PRIORITIZER MODAL -->
+    <div class="modal-overlay hidden" id="taskPrioritizerModal">
+      <div class="modal-card" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2>🎯 AI Task Prioritizer</h2>
+          <button class="modal-close" onclick="closeModal('taskPrioritizerModal')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+            📊 Analyze your tasks and get AI recommendations on which to do first, second, third, etc. based on deadline, difficulty, and time.
+          </p>
+          <button class="btn-primary" onclick="analyzeTasks()" style="width: 100%; margin-bottom: 16px;">
+            <i class="fa-solid fa-brain"></i> Analyze My Tasks
+          </button>
+          <div id="prioritizerLoader" style="display: none; text-align: center; padding: 20px;">
+            <i class="fa-solid fa-spinner fa-spin"></i> Analyzing tasks...
+          </div>
+          <div id="prioritizerResults" style="margin-top: 16px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI SETTINGS MODAL -->
+    <div class="modal-overlay hidden" id="aiSettingsModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>⚙️ AI Settings</h2>
+          <button class="modal-close" onclick="closeModal('aiSettingsModal')"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div style="padding: 12px; background: var(--surface2); border-radius: 8px; font-size: 13px; color: var(--text);">
+            <strong>✅ API Key Configured</strong><br>
+            <p style="margin-top: 8px; color: var(--text-muted);">
+              Your OpenRouter API key is set up and ready to use.
+            </p>
+            <p style="margin-top: 12px; color: var(--text-muted); font-size: 12px;">
+              <strong>Available Features:</strong><br>
+              • <strong>Ask AI:</strong> Ask academic questions and get instant answers<br>
+              • <strong>Prioritize:</strong> Get AI recommendations on which tasks to do first
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="js/app.js"></script>
   </body>
 </html>

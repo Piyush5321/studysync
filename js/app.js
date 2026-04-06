@@ -6,6 +6,10 @@ import {
   getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
   collection, query, where, onSnapshot, orderBy, serverTimestamp, getDocs
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { initDoubtSolver, askDoubt } from './ai-doubt-solver.js';
+import { prioritizeTasks, displayPrioritization } from './ai-task-prioritizer.js';
+import { analyzePredictivePerformance, renderPredictions } from './ai-predictions.js';
+import { initializeAIConfig, setAIApiKey, getAIApiKey } from './ai-config.js';
 // Storage import removed - using Firestore Base64 encoding instead
 
 // ⚠️ Replace with your actual Firebase project credentials
@@ -82,6 +86,8 @@ function initUI() {
   else { openGroupModal(); document.getElementById('smartMsg').textContent = "Set up your study group to get started!"; }
   renderMiniCalendar();
   renderCalendar();
+  initializeAIConfig();
+  initDoubtSolver(currentUser);
 }
 
 function setupListeners() {
@@ -156,6 +162,7 @@ function toast(msg, type = 'info') {
 
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+window.openModal = openModal;
 window.closeModal = closeModal;
 
 window.openGroupModal = function () { openModal('groupModal'); };
@@ -808,3 +815,47 @@ window.filterResources = function (f, btn) {
 };
 
 window.toggleNotif = function () { document.getElementById('notifPanel').classList.toggle('hidden'); };
+
+
+// ===== AI FEATURES =====
+
+// Doubt Solver
+window.submitDoubt = async function () {
+  const input = document.getElementById('doubtInput');
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+  await askDoubt(question);
+};
+
+// Task Prioritizer
+window.analyzeTasks = async function () {
+  if (!tasks || tasks.length === 0) {
+    alert('No tasks to analyze. Add some tasks first!');
+    return;
+  }
+  const result = await prioritizeTasks(tasks);
+  displayPrioritization(result);
+};
+
+// AI Settings
+window.openAISettings = function () {
+  openModal('aiSettingsModal');
+};
+
+// Render predictions on dashboard
+function renderDashboardPredictions() {
+  if (!userDoc.groupId || !tasks.length) return;
+  const predictions = analyzePredictivePerformance(tasks, userDoc, groupMembers);
+  renderPredictions(predictions);
+}
+
+// Update predictions when tasks change
+window.addEventListener('tasksUpdated', () => {
+  renderDashboardPredictions();
+});
+
+// Call predictions on initial load
+setTimeout(() => {
+  renderDashboardPredictions();
+}, 1000);
