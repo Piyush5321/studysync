@@ -72,6 +72,12 @@
         <a href="#" class="nav-item" onclick="switchPage('manage-doubts', this)"
           ><i class="fa-solid fa-list"></i><span>Manage Doubts</span></a
         >
+        <a href="#" class="nav-item" onclick="switchPage('learn', this)"
+          ><i class="fa-solid fa-book-open"></i><span>Learn</span></a
+        >
+        <a href="#" class="nav-item" onclick="switchPage('quiz', this)"
+          ><i class="fa-solid fa-brain"></i><span>Quiz</span></a
+        >
       </nav>
       <div class="sidebar-bottom">
         <div class="user-chip" id="userChip">
@@ -510,9 +516,172 @@
 
         <div id="manageDoubtsContainer" class="manage-doubts-container"></div>
       </div>
+
+      <!-- SMART LEARN PAGE -->
+      <div class="page" id="page-learn">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <div class="learn-search-wrapper">
+              <input 
+                type="text" 
+                id="learnSearchInput" 
+                class="learn-search-input" 
+                placeholder="Search any topic (e.g., DBMS, Photosynthesis, Calculus)..."
+                onkeypress="if(event.key==='Enter') window.searchTopic();"
+              />
+              <button class="learn-search-btn" onclick="window.searchTopic()">
+                <i class="fa-solid fa-search"></i> Search
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="learn-main-grid">
+          <div class="learn-sidebar">
+            <div class="learn-sidebar-header">
+              <h3>Recent Searches</h3>
+              <button class="learn-clear-btn" onclick="window.clearSearchHistory()" title="Clear history">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+            <div id="learnSearchHistory" class="learn-search-history"></div>
+          </div>
+
+          <div class="learn-content">
+            <div id="learnResultsContainer" class="learn-results-container">
+              <div class="learn-empty-state">
+                <i class="fa-solid fa-book-open"></i>
+                <h3>Start Learning</h3>
+                <p>Search for any topic to find YouTube videos and Wikipedia articles</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- QUIZ PAGE -->
+      <div class="page" id="page-quiz">
+        <div class="page-toolbar">
+          <div class="toolbar-left">
+            <h3 style="margin: 0; font-size: 14px; color: var(--text-muted);">Create & Take Quizzes</h3>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn-accent" onclick="window.openQuizModal()">
+              <i class="fa-solid fa-plus"></i> New Quiz
+            </button>
+          </div>
+        </div>
+
+        <div class="quiz-page-content">
+          <div id="quizResultsSection" style="display: none;"></div>
+
+          <div id="quizWelcomeContent">
+            <div class="quiz-welcome-card card">
+              <div class="quiz-welcome-icon"><i class="fa-solid fa-brain"></i></div>
+              <h2>Test Your Knowledge</h2>
+              <p>Create custom quizzes on any topic and challenge yourself. Get instant feedback and track your progress.</p>
+              <button class="btn-accent" onclick="window.openQuizModal()" style="margin-top: 16px;">
+                <i class="fa-solid fa-play"></i> Start Quiz
+              </button>
+            </div>
+
+            <div class="quiz-features-grid">
+              <div class="quiz-feature-card">
+                <i class="fa-solid fa-list-check"></i>
+                <h4>Multiple Topics</h4>
+                <p>Choose from science, history, geography, sports, and more</p>
+              </div>
+              <div class="quiz-feature-card">
+                <i class="fa-solid fa-sliders"></i>
+                <h4>Custom Difficulty</h4>
+                <p>Select easy, medium, or hard questions</p>
+              </div>
+              <div class="quiz-feature-card">
+                <i class="fa-solid fa-chart-line"></i>
+                <h4>Instant Results</h4>
+                <p>Get your score and review all answers</p>
+              </div>
+              <div class="quiz-feature-card">
+                <i class="fa-solid fa-redo"></i>
+                <h4>Retake Anytime</h4>
+                <p>Practice as many times as you want</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
 
+    <!-- QUIZ MODAL -->
+    <div class="modal-overlay hidden" id="quizModal">
+      <div class="modal-card quiz-modal-card">
+        <div class="modal-header">
+          <span>Create Quiz</span>
+          <button onclick="window.closeQuizModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div id="quizCreationForm" class="modal-body">
+          <div class="form-group">
+            <label>Topic</label>
+            <input 
+              type="text" 
+              id="quizTopic" 
+              placeholder="e.g., Science, History, Geography, Sports, Technology..."
+              class="quiz-input"
+            />
+            <small style="color: var(--text-muted); margin-top: 4px; display: block;">
+              Suggested: Science, History, Geography, Sports, Entertainment, Technology, Math, Literature, Music, Animals
+            </small>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Number of Questions</label>
+              <input 
+                type="number" 
+                id="quizNumQuestions" 
+                value="10" 
+                min="1" 
+                max="50"
+                class="quiz-input"
+              />
+            </div>
+            <div class="form-group">
+              <label>Difficulty Level</label>
+              <select id="quizDifficulty" class="quiz-input">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn-primary" onclick="window.startQuizCreation()" style="width: 100%; margin-top: 16px;">
+            <span>Start Quiz</span>
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+
+        <div id="quizLoading" class="quiz-loading" style="display: none;">
+          <i class="fa-solid fa-spinner"></i>
+          <p>Generating quiz questions...</p>
+        </div>
+
+        <div id="quizContainer" class="quiz-container"></div>
+
+        <div id="quizNextBtn" class="quiz-next-btn" style="display: none;">
+          <button class="btn-accent" onclick="window.nextQuestion()">
+            <span>Next Question</span>
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- GROUP MODAL -->
+
     <div class="modal-overlay hidden" id="groupModal">
       <div class="modal-card">
         <div class="modal-header">
@@ -872,6 +1041,8 @@
 
     <script src="js/study-tracker.js"></script>
     <script src="js/group-discussion.js"></script>
+    <script src="js/smart-learn.js"></script>
+    <script src="js/quiz-generator.js"></script>
     <script type="module" src="js/app.js"></script>
   </body>
 </html>

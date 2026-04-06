@@ -1,6 +1,6 @@
 // js/ai-task-prioritizer.js - Task Prioritizer (JavaScript-based)
 
-export function prioritizeTasks(tasks) {
+export function prioritizeTasks(tasks, currentUser) {
     if (!tasks || tasks.length === 0) {
         return { error: "No tasks to prioritize" };
     }
@@ -8,12 +8,22 @@ export function prioritizeTasks(tasks) {
     try {
         showPrioritizerLoading(true);
 
+        // Filter tasks assigned to current user only
+        const userTasks = tasks.filter(t => {
+            // If task has assignedTo field, check if it matches current user
+            if (t.assignedTo) {
+                return t.assignedTo === currentUser.uid;
+            }
+            // If no assignedTo, include it (unassigned tasks)
+            return !t.assignedTo;
+        });
+
         // Filter out completed tasks
-        const pendingTasks = tasks.filter(t => t.column !== 'completed');
+        const pendingTasks = userTasks.filter(t => t.column !== 'completed');
 
         if (pendingTasks.length === 0) {
             showPrioritizerLoading(false);
-            return { error: "All tasks are completed! 🎉" };
+            return { error: "No pending tasks assigned to you! 🎉" };
         }
 
         // Score each task based on priority, deadline, and time

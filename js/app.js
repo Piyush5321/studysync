@@ -108,6 +108,14 @@ function initUI() {
   if (window.initStudyTracker) {
     window.initStudyTracker(rtdb, currentUser, userDoc.groupId, [], []);
   }
+  // Initialize Smart Learn
+  if (window.initSmartLearn) {
+    window.initSmartLearn();
+  }
+  // Initialize Quiz Generator
+  if (window.initQuizGenerator) {
+    window.initQuizGenerator();
+  }
   // Group discussion will be initialized after group members are loaded
 }
 
@@ -204,8 +212,8 @@ function switchPage(name, el) {
   document.getElementById('page-' + name).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   if (el) el.classList.add('active');
-  const titles = { dashboard: 'Dashboard', calendar: 'Calendar', tasks: 'Tasks', progress: 'Progress', leaderboard: 'Leaderboard', resources: 'Resources', mytasks: 'My Tasks', livestudy: 'Live Study', discussion: 'Group Discussion', 'manage-doubts': 'Manage Doubts' };
-  const subs = { dashboard: 'Overview', calendar: 'Schedule & Events', tasks: 'Task Manager', progress: 'Analytics & Insights', leaderboard: 'Rankings & Points', resources: 'Shared Files & Links', mytasks: 'Track Your Study Time', livestudy: 'Real-time Group Activity', discussion: 'Collaborate & Solve Doubts', 'manage-doubts': 'View & Manage All Doubts' };
+  const titles = { dashboard: 'Dashboard', calendar: 'Calendar', tasks: 'Tasks', progress: 'Progress', leaderboard: 'Leaderboard', resources: 'Resources', mytasks: 'My Tasks', livestudy: 'Live Study', discussion: 'Group Discussion', 'manage-doubts': 'Manage Doubts', learn: 'Smart Learn', quiz: 'Quiz Generator' };
+  const subs = { dashboard: 'Overview', calendar: 'Schedule & Events', tasks: 'Task Manager', progress: 'Analytics & Insights', leaderboard: 'Rankings & Points', resources: 'Shared Files & Links', mytasks: 'Track Your Study Time', livestudy: 'Real-time Group Activity', discussion: 'Collaborate & Solve Doubts', 'manage-doubts': 'View & Manage All Doubts', learn: 'YouTube Videos & Wikipedia Articles', quiz: 'Create & Take Quizzes' };
   document.getElementById('pageTitle').textContent = titles[name] || name;
   document.getElementById('breadcrumb').textContent = subs[name] || '';
   if (name === 'calendar') renderCalendar();
@@ -223,6 +231,12 @@ function switchPage(name, el) {
   }
   if (name === 'manage-doubts') {
     if (window.renderManageDoubts) window.renderManageDoubts('all');
+  }
+  if (name === 'learn') {
+    if (window.showSearchHistory) window.showSearchHistory();
+  }
+  if (name === 'quiz') {
+    // Quiz page initialized
   }
 }
 window.switchPage = switchPage;
@@ -946,7 +960,7 @@ window.analyzeTasks = async function () {
     alert('No tasks to analyze. Add some tasks first!');
     return;
   }
-  const result = await prioritizeTasks(tasks);
+  const result = await prioritizeTasks(tasks, currentUser);
   displayPrioritization(result);
 };
 
