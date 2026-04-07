@@ -10,6 +10,13 @@ async function loadQuizStats() {
     try {
         console.log("📊 Loading quiz stats...");
 
+        // Check if we're on the progress page
+        const quizStatsChart = document.getElementById('quizStatsChart');
+        if (!quizStatsChart) {
+            console.log("⏭️ Quiz stats chart not on this page, skipping");
+            return;
+        }
+
         if (!window.currentUser?.uid) {
             console.error("❌ User not authenticated");
             return;
@@ -17,6 +24,11 @@ async function loadQuizStats() {
 
         if (!window.db) {
             console.error("❌ Firestore not available");
+            return;
+        }
+
+        if (!window.firebaseModules) {
+            console.error("❌ Firebase modules not available");
             return;
         }
 
@@ -74,163 +86,171 @@ async function loadQuizStats() {
  * Display quiz stats chart
  */
 function displayQuizStats(labels, percentages, topics, quizzes) {
-    const ctx = document.getElementById('quizStatsChart');
-    if (!ctx) {
-        console.error("❌ Chart canvas not found");
-        return;
-    }
+    try {
+        const ctx = document.getElementById('quizStatsChart');
+        if (!ctx) {
+            console.error("❌ Chart canvas not found");
+            return;
+        }
 
-    // Destroy existing chart if it exists
-    if (quizStatsChart) {
-        quizStatsChart.destroy();
-    }
+        // Destroy existing chart if it exists
+        if (quizStatsChart) {
+            quizStatsChart.destroy();
+        }
 
-    // Create color array based on performance
-    const colors = percentages.map(pct => {
-        if (pct >= 80) return '#4CAF50'; // Green - Excellent
-        if (pct >= 60) return '#2196F3'; // Blue - Good
-        if (pct >= 40) return '#FF9800'; // Orange - Fair
-        return '#F44336'; // Red - Poor
-    });
+        // Create color array based on performance
+        const colors = percentages.map(pct => {
+            if (pct >= 80) return '#4CAF50'; // Green - Excellent
+            if (pct >= 60) return '#2196F3'; // Blue - Good
+            if (pct >= 40) return '#FF9800'; // Orange - Fair
+            return '#F44336'; // Red - Poor
+        });
 
-    // Create line chart
-    quizStatsChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Quiz Score (%)',
-                    data: percentages,
-                    borderColor: '#4CAF50',
-                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 6,
-                    pointBackgroundColor: colors,
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointHoverRadius: 8
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: true,
-                    labels: {
-                        color: 'var(--text)',
-                        font: { size: 12 }
+        // Create line chart
+        quizStatsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Quiz Score (%)',
+                        data: percentages,
+                        borderColor: '#4CAF50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 6,
+                        pointBackgroundColor: colors,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointHoverRadius: 8
                     }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    titleColor: '#fff',
-                    bodyColor: '#fff',
-                    borderColor: '#4CAF50',
-                    borderWidth: 1,
-                    padding: 12,
-                    displayColors: true,
-                    callbacks: {
-                        afterLabel: function (context) {
-                            const index = context.dataIndex;
-                            const quiz = quizzes[index];
-                            return `Topic: ${quiz.topic}\nDifficulty: ${quiz.difficulty}\nScore: ${quiz.correctAnswers}/${quiz.totalQuestions}`;
-                        }
-                    }
-                }
+                ]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        color: 'var(--text-muted)',
-                        callback: function (value) {
-                            return value + '%';
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: {
+                            color: 'var(--text)',
+                            font: { size: 12 }
                         }
                     },
-                    grid: {
-                        color: 'var(--border)',
-                        drawBorder: false
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: '#4CAF50',
+                        borderWidth: 1,
+                        padding: 12,
+                        displayColors: true,
+                        callbacks: {
+                            afterLabel: function (context) {
+                                const index = context.dataIndex;
+                                const quiz = quizzes[index];
+                                return `Topic: ${quiz.topic}\nDifficulty: ${quiz.difficulty}\nScore: ${quiz.correctAnswers}/${quiz.totalQuestions}`;
+                            }
+                        }
                     }
                 },
-                x: {
-                    ticks: {
-                        color: 'var(--text-muted)',
-                        maxRotation: 45,
-                        minRotation: 0
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            color: 'var(--text-muted)',
+                            callback: function (value) {
+                                return value + '%';
+                            }
+                        },
+                        grid: {
+                            color: 'var(--border)',
+                            drawBorder: false
+                        }
                     },
-                    grid: {
-                        display: false,
-                        drawBorder: false
+                    x: {
+                        ticks: {
+                            color: 'var(--text-muted)',
+                            maxRotation: 45,
+                            minRotation: 0
+                        },
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        }
                     }
                 }
             }
-        }
-    });
+        });
 
-    // Display stats info
-    displayQuizStatsInfo(quizzes);
+        // Display stats info
+        displayQuizStatsInfo(quizzes);
+    } catch (error) {
+        console.error("❌ Error displaying quiz stats chart:", error);
+    }
 }
 
 /**
  * Display quiz stats information
  */
 function displayQuizStatsInfo(quizzes) {
-    const infoDiv = document.getElementById('quizStatsInfo');
-    if (!infoDiv) return;
+    try {
+        const infoDiv = document.getElementById('quizStatsInfo');
+        if (!infoDiv) return;
 
-    const totalQuizzes = quizzes.length;
-    const avgScore = Math.round(quizzes.reduce((sum, q) => sum + q.percentage, 0) / totalQuizzes);
-    const bestScore = Math.max(...quizzes.map(q => q.percentage));
-    const worstScore = Math.min(...quizzes.map(q => q.percentage));
+        const totalQuizzes = quizzes.length;
+        const avgScore = Math.round(quizzes.reduce((sum, q) => sum + q.percentage, 0) / totalQuizzes);
+        const bestScore = Math.max(...quizzes.map(q => q.percentage));
+        const worstScore = Math.min(...quizzes.map(q => q.percentage));
 
-    // Count by topic
-    const topicCounts = {};
-    quizzes.forEach(q => {
-        topicCounts[q.topic] = (topicCounts[q.topic] || 0) + 1;
-    });
+        // Count by topic
+        const topicCounts = {};
+        quizzes.forEach(q => {
+            topicCounts[q.topic] = (topicCounts[q.topic] || 0) + 1;
+        });
 
-    // Count by difficulty
-    const difficultyCounts = {};
-    quizzes.forEach(q => {
-        difficultyCounts[q.difficulty] = (difficultyCounts[q.difficulty] || 0) + 1;
-    });
+        // Count by difficulty
+        const difficultyCounts = {};
+        quizzes.forEach(q => {
+            difficultyCounts[q.difficulty] = (difficultyCounts[q.difficulty] || 0) + 1;
+        });
 
-    let html = `
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
-            <div style="background: var(--surface); padding: 12px; border-radius: 6px; border-left: 3px solid #4CAF50;">
-                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Quizzes</div>
-                <div style="font-size: 20px; font-weight: 700; color: var(--accent);">${totalQuizzes}</div>
+        let html = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                <div style="background: var(--surface); padding: 12px; border-radius: 6px; border-left: 3px solid #4CAF50;">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Quizzes</div>
+                    <div style="font-size: 20px; font-weight: 700; color: var(--accent);">${totalQuizzes}</div>
+                </div>
+                <div style="background: var(--surface); padding: 12px; border-radius: 6px; border-left: 3px solid #2196F3;">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Average Score</div>
+                    <div style="font-size: 20px; font-weight: 700; color: var(--accent);">${avgScore}%</div>
+                </div>
+                <div style="background: var(--surface); padding: 12px; border-radius: 6px; border-left: 3px solid #4CAF50;">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Best Score</div>
+                    <div style="font-size: 20px; font-weight: 700; color: #4CAF50;">${bestScore}%</div>
+                </div>
+                <div style="background: var(--surface); padding: 12px; border-radius: 6px; border-left: 3px solid #F44336;">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Lowest Score</div>
+                    <div style="font-size: 20px; font-weight: 700; color: #F44336;">${worstScore}%</div>
+                </div>
             </div>
-            <div style="background: var(--surface); padding: 12px; border-radius: 6px; border-left: 3px solid #2196F3;">
-                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Average Score</div>
-                <div style="font-size: 20px; font-weight: 700; color: var(--accent);">${avgScore}%</div>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+                    <strong>Topics:</strong> ${Object.entries(topicCounts).map(([topic, count]) => `${topic} (${count})`).join(', ')}
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted);">
+                    <strong>Difficulty:</strong> ${Object.entries(difficultyCounts).map(([diff, count]) => `${diff} (${count})`).join(', ')}
+                </div>
             </div>
-            <div style="background: var(--surface); padding: 12px; border-radius: 6px; border-left: 3px solid #4CAF50;">
-                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Best Score</div>
-                <div style="font-size: 20px; font-weight: 700; color: #4CAF50;">${bestScore}%</div>
-            </div>
-            <div style="background: var(--surface); padding: 12px; border-radius: 6px; border-left: 3px solid #F44336;">
-                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Lowest Score</div>
-                <div style="font-size: 20px; font-weight: 700; color: #F44336;">${worstScore}%</div>
-            </div>
-        </div>
-        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-                <strong>Topics:</strong> ${Object.entries(topicCounts).map(([topic, count]) => `${topic} (${count})`).join(', ')}
-            </div>
-            <div style="font-size: 12px; color: var(--text-muted);">
-                <strong>Difficulty:</strong> ${Object.entries(difficultyCounts).map(([diff, count]) => `${diff} (${count})`).join(', ')}
-            </div>
-        </div>
-    `;
+        `;
 
-    infoDiv.innerHTML = html;
+        infoDiv.innerHTML = html;
+    } catch (error) {
+        console.error("❌ Error displaying quiz stats info:", error);
+    }
 }
 
 /**
