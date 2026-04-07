@@ -1,0 +1,34 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+firebase-debug.log*
+firebase-debug.*.log*
+
+# Firebase cache
+.firebase/
+
+# Firebase config
+.runtimeconfig.json
+
+# Stripe secret keys
+.env.local
+.env.*.local
+
+# Node modules
+node_modules/
+
+# IDE
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db

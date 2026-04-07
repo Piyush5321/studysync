@@ -418,6 +418,13 @@
             </div>
             <div id="burnoutList" class="burnout-list"></div>
           </div>
+          <div class="card col-span-2">
+            <div class="card-header">
+              <span><i class="fa-solid fa-chart-line"></i> Quiz Performance Stats</span>
+            </div>
+            <canvas id="quizStatsChart" height="300"></canvas>
+            <div id="quizStatsInfo" style="margin-top: 16px; font-size: 13px; color: var(--text-muted);"></div>
+          </div>
         </div>
       </div>
 
@@ -610,39 +617,62 @@
           </div>
         </div>
 
+        <!-- Quiz Tabs -->
+        <div style="display: flex; gap: 8px; padding: 16px; border-bottom: 1px solid var(--border); background: var(--surface);">
+          <button class="quiz-tab-btn" onclick="window.switchQuizTab('quiz')" style="padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500;">
+            <i class="fa-solid fa-play"></i> Quiz
+          </button>
+          <button class="quiz-tab-btn" onclick="window.switchQuizTab('results')" style="padding: 8px 16px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500;">
+            <i class="fa-solid fa-chart-bar"></i> Results
+          </button>
+        </div>
+
         <div class="quiz-page-content">
-          <div id="quizResultsSection" style="display: none;"></div>
+          <!-- Quiz Tab -->
+          <div id="quizTabContent" style="display: block;">
+            <div id="quizResultsSection" style="display: none;"></div>
 
-          <div id="quizWelcomeContent">
-            <div class="quiz-welcome-card card">
-              <div class="quiz-welcome-icon"><i class="fa-solid fa-brain"></i></div>
-              <h2>Test Your Knowledge</h2>
-              <p>Create custom quizzes on any topic and challenge yourself. Get instant feedback and track your progress.</p>
-              <button class="btn-accent" onclick="window.openQuizModal()" style="margin-top: 16px;">
-                <i class="fa-solid fa-play"></i> Start Quiz
-              </button>
+            <div id="quizWelcomeContent">
+              <div class="quiz-welcome-card card">
+                <div class="quiz-welcome-icon"><i class="fa-solid fa-brain"></i></div>
+                <h2>Test Your Knowledge</h2>
+                <p>Create custom quizzes on any topic and challenge yourself. Get instant feedback and track your progress.</p>
+                <button class="btn-accent" onclick="window.openQuizModal()" style="margin-top: 16px;">
+                  <i class="fa-solid fa-play"></i> Start Quiz
+                </button>
+              </div>
+
+              <div class="quiz-features-grid">
+                <div class="quiz-feature-card">
+                  <i class="fa-solid fa-list-check"></i>
+                  <h4>Multiple Topics</h4>
+                  <p>Choose from science, history, geography, sports, and more</p>
+                </div>
+                <div class="quiz-feature-card">
+                  <i class="fa-solid fa-sliders"></i>
+                  <h4>Custom Difficulty</h4>
+                  <p>Select easy, medium, or hard questions</p>
+                </div>
+                <div class="quiz-feature-card">
+                  <i class="fa-solid fa-chart-line"></i>
+                  <h4>Instant Results</h4>
+                  <p>Get your score and review all answers</p>
+                </div>
+                <div class="quiz-feature-card">
+                  <i class="fa-solid fa-redo"></i>
+                  <h4>Retake Anytime</h4>
+                  <p>Practice as many times as you want</p>
+                </div>
+              </div>
             </div>
+          </div>
 
-            <div class="quiz-features-grid">
-              <div class="quiz-feature-card">
-                <i class="fa-solid fa-list-check"></i>
-                <h4>Multiple Topics</h4>
-                <p>Choose from science, history, geography, sports, and more</p>
-              </div>
-              <div class="quiz-feature-card">
-                <i class="fa-solid fa-sliders"></i>
-                <h4>Custom Difficulty</h4>
-                <p>Select easy, medium, or hard questions</p>
-              </div>
-              <div class="quiz-feature-card">
-                <i class="fa-solid fa-chart-line"></i>
-                <h4>Instant Results</h4>
-                <p>Get your score and review all answers</p>
-              </div>
-              <div class="quiz-feature-card">
-                <i class="fa-solid fa-redo"></i>
-                <h4>Retake Anytime</h4>
-                <p>Practice as many times as you want</p>
+          <!-- Results Tab -->
+          <div id="resultsTabContent" style="display: none; padding: 20px;">
+            <div id="quizResultsContainer">
+              <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 16px; display: block;"></i>
+                <p>Loading results...</p>
               </div>
             </div>
           </div>
@@ -1388,7 +1418,10 @@
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="js/group-discussion.js"></script>
     <script src="js/smart-learn.js"></script>
+    <script src="js/cohere-config.js"></script>
     <script src="js/quiz-generator.js"></script>
+    <script src="js/quiz-results-tracker.js"></script>
+    <script src="js/quiz-stats.js"></script>
     <script src="js/quiz-task-verification.js"></script>
     <script src="js/task-proof-verification.js"></script>
     <script type="module" src="js/app.js"></script>

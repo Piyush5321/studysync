@@ -26,6 +26,11 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const rtdb = getDatabase(app);
 
+// Export Firebase to window for other scripts
+window.db = db;
+window.auth = auth;
+window.rtdb = rtdb;
+
 // Export Firebase modules to window for study-tracker.js and group-discussion.js
 window.firebaseModules = {
   ref, set, remove, onValue,
@@ -47,6 +52,7 @@ let pendingApprovalFilter = 'all'; // Filter for pending approval tasks: 'all', 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'index.html'; return; }
   currentUser = user;
+  window.currentUser = currentUser; // Export to window for other scripts
   await loadUserDoc();
   initUI();
   setupListeners();
@@ -105,6 +111,12 @@ function initUI() {
   document.getElementById('welcomeGreeting').textContent = (hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening") + ' 👋';
   document.getElementById('wsPoints').textContent = userDoc.points || 0;
   document.getElementById('wsStreak').textContent = (userDoc.streak || 0) + ' 🔥';
+
+  // Request notification permission
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+
   if (userDoc.groupId) { loadGroup(userDoc.groupId); }
   else { openGroupModal(); document.getElementById('smartMsg').textContent = "Set up your study group to get started!"; }
   renderMiniCalendar();
@@ -142,6 +154,49 @@ function initUI() {
 function setupListeners() {
   if (!userDoc.groupId) return;
   const gid = userDoc.groupId;
+
+  // First, load members synchronously before setting up listeners
+  loadGroupMembers(gid).then(() => {
+    console.log("✅ Initial members loaded, now setting up real-time listeners");
+
+    // Listen to group document for real-time member updates
+    console.log("📡 Setting up real-time listener for group members...");
+    onSnapshot(doc(db, "groups", gid), async (groupSnap) => {
+      if (groupSnap.exists()) {
+        const groupData = groupSnap.data();
+        const memberIds = groupData.members || [];
+        console.log("🔄 Group members updated in real-time:", memberIds);
+
+        // Fetch fresh member data
+        const freshMembers = [];
+        for (const memberId of memberIds) {
+          try {
+            const userSnap = await getDoc(doc(db, "users", memberId));
+            if (userSnap.exists()) {
+              freshMembers.push(userSnap.data());
+            }
+          } catch (error) {
+            console.error("Error loading member:", memberId, error);
+          }
+        }
+
+        // Only update if members actually changed
+        if (freshMembers.length !== groupMembers.length ||
+          freshMembers.some((m, i) => m.uid !== groupMembers[i]?.uid)) {
+          groupMembers = freshMembers;
+          console.log("✅ Group members updated:", groupMembers.length);
+
+          // Update UI elements that depend on members
+          document.getElementById('sidebarGroupMembers').textContent = groupMembers.length + ' members';
+          populateAssigneeDropdown();
+          renderLeaderboard();
+          renderProgressCharts();
+          renderBurnoutMonitor();
+        }
+      }
+    });
+  });
+
   onSnapshot(query(collection(db, "groups", gid, "tasks"), orderBy("createdAt", "desc")), snap => {
     tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     window.tasksGlobal = tasks;
@@ -175,7 +230,44 @@ function setupListeners() {
     activity = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderActivity();
   });
-  loadGroupMembers(gid);
+
+  // Listen to user notifications
+  console.log("📡 Setting up notification listener for user:", currentUser.uid);
+  onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("createdAt", "desc")), snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type === "added") {
+        const notification = change.doc.data();
+        console.log("🔔 New notification:", notification);
+
+        // Show toast notification
+        if (notification.type === "task_approved") {
+          toast(`✅ ${notification.approvedBy} approved: ${notification.taskTitle}`, "success");
+        } else if (notification.type === "task_rejected") {
+          toast(`❌ ${notification.rejectedBy} rejected: ${notification.taskTitle}`, "error");
+        }
+
+        // Show browser notification if available
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("StudySync Task Update", {
+            body: notification.message,
+            icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>📋</text></svg>"
+          });
+        }
+      }
+    });
+  });
+
+  // Initialize group discussion after members are loaded
+  setTimeout(() => {
+    if (window.initGroupDiscussion) {
+      window.initGroupDiscussion(db, currentUser, userDoc.groupId, tasks, groupMembers);
+    }
+
+    // Load verification results after group is loaded
+    if (window.loadVerificationResults) {
+      window.loadVerificationResults();
+    }
+  }, 500);
 }
 
 async function loadGroup(gid) {
@@ -191,26 +283,66 @@ async function loadGroup(gid) {
 }
 
 async function loadGroupMembers(gid) {
-  const snap = await getDocs(query(collection(db, "users"), where("groupId", "==", gid)));
-  groupMembers = snap.docs.map(d => d.data());
-  document.getElementById('sidebarGroupMembers').textContent = groupMembers.length + ' members';
-  populateAssigneeDropdown(); renderLeaderboard(); renderProgressCharts(); renderBurnoutMonitor();
+  try {
+    console.log("=== LOADING GROUP MEMBERS ===");
+    console.log("Group ID:", gid);
 
-  // Initialize study tracker with current data
-  if (window.initStudyTracker) {
-    window.initStudyTracker(rtdb, currentUser, userDoc.groupId, tasks, groupMembers);
-  }
+    // First, get the group document to get the members array
+    const groupSnap = await getDoc(doc(db, "groups", gid));
+    if (!groupSnap.exists()) {
+      console.error("❌ Group not found");
+      groupMembers = [];
+      return;
+    }
 
-  // Initialize group discussion with correct parameters
-  if (window.initGroupDiscussion) {
-    window.initGroupDiscussion(db, currentUser, userDoc.groupId, tasks, groupMembers);
-  }
+    const groupData = groupSnap.data();
+    const memberIds = groupData.members || [];
+    console.log("📋 Group members IDs from Firestore:", memberIds);
+    console.log("📊 Total member IDs:", memberIds.length);
 
-  // Load verification results after group is loaded
-  if (window.loadVerificationResults) {
-    window.loadVerificationResults();
+    // Now fetch each member's user document
+    groupMembers = [];
+    for (const memberId of memberIds) {
+      try {
+        console.log("🔍 Fetching user document for UID:", memberId);
+        const userSnap = await getDoc(doc(db, "users", memberId));
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          console.log("✅ Member found:", userData.name, "| UID:", userData.uid, "| Points:", userData.points);
+          groupMembers.push(userData);
+        } else {
+          console.warn("⚠️ User document not found for UID:", memberId);
+        }
+      } catch (error) {
+        console.error("❌ Error loading member:", memberId, error);
+      }
+    }
+
+    console.log("✅ Loaded", groupMembers.length, "group members");
+    console.log("📊 All members:", groupMembers.map(m => ({ name: m.name, uid: m.uid, points: m.points })));
+
+    // Update sidebar
+    const sidebarEl = document.getElementById('sidebarGroupMembers');
+    if (sidebarEl) {
+      sidebarEl.textContent = groupMembers.length + ' members';
+    }
+
+    populateAssigneeDropdown();
+    renderLeaderboard();
+    renderProgressCharts();
+    renderBurnoutMonitor();
+
+    // Initialize study tracker with current data
+    if (window.initStudyTracker) {
+      window.initStudyTracker(rtdb, currentUser, userDoc.groupId, tasks, groupMembers);
+    }
+
+  } catch (error) {
+    console.error("❌ Error loading group members:", error);
   }
 }
+
+
 
 // ===== MY TASKS RENDER =====
 // Delegated to study-tracker.js
@@ -261,10 +393,48 @@ function switchPage(name, el) {
     if (window.showSearchHistory) window.showSearchHistory();
   }
   if (name === 'quiz') {
-    // Quiz page initialized
+    // Initialize quiz results tracker
+    if (window.initQuizResultsTracker) {
+      window.initQuizResultsTracker();
+    }
   }
 }
 window.switchPage = switchPage;
+
+// Switch between quiz tabs
+window.switchQuizTab = function (tab) {
+  const quizTabBtn = document.querySelectorAll('.quiz-tab-btn')[0];
+  const resultsTabBtn = document.querySelectorAll('.quiz-tab-btn')[1];
+  const quizTabContent = document.getElementById('quizTabContent');
+  const resultsTabContent = document.getElementById('resultsTabContent');
+
+  if (tab === 'quiz') {
+    quizTabBtn.style.background = 'var(--accent)';
+    quizTabBtn.style.color = 'white';
+    quizTabBtn.style.borderColor = 'var(--accent)';
+    resultsTabBtn.style.background = 'var(--surface2)';
+    resultsTabBtn.style.color = 'var(--text)';
+    resultsTabBtn.style.borderColor = 'var(--border)';
+    quizTabContent.style.display = 'block';
+    resultsTabContent.style.display = 'none';
+  } else if (tab === 'results') {
+    quizTabBtn.style.background = 'var(--surface2)';
+    quizTabBtn.style.color = 'var(--text)';
+    quizTabBtn.style.borderColor = 'var(--border)';
+    resultsTabBtn.style.background = 'var(--accent)';
+    resultsTabBtn.style.color = 'white';
+    resultsTabBtn.style.borderColor = 'var(--accent)';
+    quizTabContent.style.display = 'none';
+    resultsTabContent.style.display = 'block';
+    // Load and display results when switching to results tab (non-blocking)
+    if (window.loadQuizResults && window.displayQuizResultsInTab) {
+      setTimeout(async () => {
+        await window.loadQuizResults();
+        window.displayQuizResultsInTab();
+      }, 0);
+    }
+  }
+};
 
 window.toggleSidebar = function () {
   document.getElementById('sidebar').classList.toggle('collapsed');
@@ -383,17 +553,82 @@ window.filterPendingApproval = function (filter, buttonEl) {
 
 window.openGroupModal = function () { openModal('groupModal'); };
 window.openGroupDetailsModal = function () {
+  console.log("=== OPENING GROUP DETAILS MODAL ===");
+  console.log("userDoc.groupId:", userDoc?.groupId);
+
   if (!userDoc.groupId) {
     toast("You are not in a group", "error");
     return;
   }
 
-  const groupName = groupDoc?.name || "Study Group";
-  const groupSubject = groupDoc?.subject || "N/A";
-  const groupCode = groupDoc?.code || "N/A";
-  const totalMembers = groupMembers.length;
+  // Force reload members from Firestore every time modal opens
+  console.log("🔄 Force reloading group members from Firestore...");
 
-  let html = `
+  (async () => {
+    try {
+      // Fetch fresh group data
+      const groupSnap = await getDoc(doc(db, "groups", userDoc.groupId));
+      if (!groupSnap.exists()) {
+        console.error("❌ Group not found");
+        toast("Group not found", "error");
+        return;
+      }
+
+      const groupData = groupSnap.data();
+      const memberIds = groupData.members || [];
+      console.log("📋 Member IDs from Firestore:", memberIds);
+      console.log("📊 Total members in group:", memberIds.length);
+
+      // Fetch each member's data
+      const freshMembers = [];
+      for (const memberId of memberIds) {
+        try {
+          console.log("🔍 Fetching user data for UID:", memberId);
+          const userSnap = await getDoc(doc(db, "users", memberId));
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            console.log("✅ Fetched member:", userData.name, "| UID:", userData.uid, "| Points:", userData.points);
+            freshMembers.push(userData);
+          } else {
+            console.warn("⚠️ User document not found for UID:", memberId);
+          }
+        } catch (error) {
+          console.error("❌ Error fetching member:", memberId, error);
+        }
+      }
+
+      console.log("✅ Total members fetched:", freshMembers.length);
+      console.log("📊 Members data:", freshMembers.map(m => ({ name: m.name, uid: m.uid, points: m.points })));
+
+      // Update global groupMembers
+      groupMembers = freshMembers;
+
+      // Display modal with fresh data
+      displayGroupDetailsModal();
+    } catch (error) {
+      console.error("❌ Error reloading members:", error);
+      toast("Error loading group members", "error");
+    }
+  })();
+};
+
+function displayGroupDetailsModal() {
+  try {
+    console.log("=== DISPLAYING GROUP DETAILS MODAL ===");
+    console.log("groupDoc:", groupDoc);
+    console.log("groupMembers (cached):", groupMembers);
+
+    const groupName = groupDoc?.name || "Study Group";
+    const groupSubject = groupDoc?.subject || "N/A";
+    const groupCode = groupDoc?.code || "N/A";
+    const totalMembers = groupMembers.length;
+    const isUserInGroup = groupMembers.some(m => m.uid === currentUser.uid);
+
+    console.log("Group info:", { groupName, groupSubject, groupCode, totalMembers });
+    console.log("Members to display:", groupMembers.map(m => ({ name: m.name, uid: m.uid, points: m.points })));
+    console.log("Is current user in group:", isUserInGroup);
+
+    let html = `
     <div style="padding: 20px;">
       <div style="margin-bottom: 24px;">
         <h3 style="margin: 0 0 8px 0; font-size: 18px; color: var(--text);">${escapeHtml(groupName)}</h3>
@@ -405,9 +640,16 @@ window.openGroupDetailsModal = function () {
           <span style="font-size: 13px; color: var(--text-muted);">Invite Code</span>
           <span style="font-family: monospace; font-weight: 600; color: var(--accent); font-size: 14px;">${escapeHtml(groupCode)}</span>
         </div>
-        <button class="btn-small" onclick="window.copyGroupCode('${groupCode}')" style="width: 100%; padding: 8px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
-          <i class="fa-solid fa-copy"></i> Copy Code
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-small" onclick="window.copyGroupCode('${groupCode}')" style="flex: 1; padding: 8px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+            <i class="fa-solid fa-copy"></i> Copy Code
+          </button>
+          ${!isUserInGroup ? `
+          <button class="btn-small" onclick="window.joinGroupFromModal('${groupCode}')" style="flex: 1; padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+            <i class="fa-solid fa-user-plus"></i> Join Group
+          </button>
+          ` : ''}
+        </div>
       </div>
 
       <div style="margin-bottom: 20px;">
@@ -417,26 +659,31 @@ window.openGroupDetailsModal = function () {
         <div style="display: flex; flex-direction: column; gap: 8px;">
   `;
 
-  groupMembers.forEach(member => {
-    const isCurrentUser = member.uid === currentUser.uid;
-    const avatar = member.name?.charAt(0).toUpperCase() || "?";
-    html += `
-      <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border);">
-        <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">
-          ${avatar}
-        </div>
-        <div style="flex: 1;">
-          <div style="font-size: 13px; font-weight: 500; color: var(--text);">
-            ${escapeHtml(member.name || "Unknown")}
-            ${isCurrentUser ? '<span style="margin-left: 8px; font-size: 11px; background: var(--accent); color: white; padding: 2px 6px; border-radius: 3px; font-weight: 600;">You</span>' : ''}
+    if (groupMembers.length === 0) {
+      html += `<div style="text-align: center; padding: 20px; color: var(--text-muted);">No members yet</div>`;
+    } else {
+      groupMembers.forEach((member, index) => {
+        console.log(`Member ${index}:`, member.name, member.uid, member.points);
+        const isCurrentUser = member.uid === currentUser.uid;
+        const avatar = member.name?.charAt(0).toUpperCase() || "?";
+        html += `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border);">
+          <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">
+            ${avatar}
           </div>
-          <div style="font-size: 11px; color: var(--text-muted);">${member.points || 0} pts</div>
+          <div style="flex: 1;">
+            <div style="font-size: 13px; font-weight: 500; color: var(--text);">
+              ${escapeHtml(member.name || "Unknown")}
+              ${isCurrentUser ? '<span style="margin-left: 8px; font-size: 11px; background: var(--accent); color: white; padding: 2px 6px; border-radius: 3px; font-weight: 600;">You</span>' : ''}
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted);">${member.points || 0} pts</div>
+          </div>
         </div>
-      </div>
-    `;
-  });
+      `;
+      });
+    }
 
-  html += `
+    html += `
         </div>
       </div>
 
@@ -446,8 +693,56 @@ window.openGroupDetailsModal = function () {
     </div>
   `;
 
-  document.getElementById('groupDetailsContent').innerHTML = html;
-  openModal('groupDetailsModal');
+    document.getElementById('groupDetailsContent').innerHTML = html;
+    openModal('groupDetailsModal');
+    console.log("✅ Group details modal opened with", groupMembers.length, "members");
+  } catch (error) {
+    console.error("❌ Error displaying group details:", error);
+    toast("Error loading group details", "error");
+  }
+}
+
+window.debugGroupMembers = async function () {
+  console.log("=== DEBUG GROUP MEMBERS ===");
+  console.log("Current user UID:", currentUser.uid);
+  console.log("Current user groupId:", userDoc.groupId);
+
+  if (!userDoc.groupId) {
+    console.error("❌ User not in a group");
+    return;
+  }
+
+  try {
+    // Fetch group document
+    const groupSnap = await getDoc(doc(db, "groups", userDoc.groupId));
+    if (!groupSnap.exists()) {
+      console.error("❌ Group document not found");
+      return;
+    }
+
+    const groupData = groupSnap.data();
+    console.log("📋 Group data:", groupData);
+    console.log("📊 Members array in Firestore:", groupData.members);
+    console.log("📊 Total members in array:", groupData.members?.length || 0);
+
+    // Fetch each member
+    if (groupData.members && groupData.members.length > 0) {
+      console.log("🔍 Fetching individual member documents...");
+      for (const memberId of groupData.members) {
+        const userSnap = await getDoc(doc(db, "users", memberId));
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          console.log(`✅ Member: ${userData.name} (${memberId}) - ${userData.points} pts`);
+        } else {
+          console.warn(`⚠️ User document not found for ${memberId}`);
+        }
+      }
+    }
+
+    console.log("✅ Debug complete");
+  } catch (error) {
+    console.error("❌ Debug error:", error);
+  }
 };
 
 window.copyGroupCode = function (code) {
@@ -456,6 +751,80 @@ window.copyGroupCode = function (code) {
   }).catch(() => {
     toast("Failed to copy code", "error");
   });
+};
+
+window.joinGroupFromModal = async function (code) {
+  console.log("🔍 Joining group from modal with code:", code);
+  try {
+    const q = query(collection(db, "groups"), where("code", "==", code));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      console.error("❌ No group found with code:", code);
+      toast("Invalid code", "error");
+      return;
+    }
+
+    const gid = snap.docs[0].id;
+    const groupRef = snap.docs[0].ref;
+    const groupData = snap.docs[0].data();
+    const currentMembers = groupData.members || [];
+
+    console.log("✅ Found group:", gid);
+    console.log("📋 Current members in group:", currentMembers);
+    console.log("👤 Current user UID:", currentUser.uid);
+
+    // Check if user is already a member
+    if (currentMembers.includes(currentUser.uid)) {
+      console.warn("⚠️ User already in group");
+      toast("You are already a member of this group", "error");
+      return;
+    }
+
+    // Add user to members array
+    const updatedMembers = [...currentMembers, currentUser.uid];
+    console.log("➕ Adding user to members. New members array:", updatedMembers);
+
+    // Update group document with new members
+    await updateDoc(groupRef, { members: updatedMembers });
+    console.log("✅ Group document updated with new members");
+
+    // Wait a moment for Firestore to sync
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Verify the update was successful
+    const verifySnap = await getDoc(groupRef);
+    const verifyData = verifySnap.data();
+    const verifyMembers = verifyData.members || [];
+    console.log("✅ Verification - Members in group after update:", verifyMembers);
+    console.log("✅ Verification - Total members:", verifyMembers.length);
+
+    if (!verifyMembers.includes(currentUser.uid)) {
+      console.error("❌ CRITICAL: User was not added to group!");
+      toast("Error: Failed to add you to group. Please try again.", "error");
+      return;
+    }
+
+    // Update user document with groupId
+    await updateDoc(doc(db, "users", currentUser.uid), { groupId: gid });
+    console.log("✅ User document updated with groupId");
+
+    userDoc.groupId = gid;
+    toast("Successfully joined group!", "success");
+
+    // Reload group and listeners
+    await loadGroup(gid);
+    setupListeners();
+
+    // Refresh the modal to show updated members
+    setTimeout(() => {
+      window.openGroupDetailsModal();
+    }, 500);
+
+  } catch (e) {
+    console.error("❌ Error joining group from modal:", e);
+    toast("Error joining group: " + e.message, "error");
+  }
 };
 window.switchModalTab = function (tab, el) {
   document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
@@ -482,17 +851,73 @@ window.joinGroup = async function () {
   const code = document.getElementById('joinCode').value.trim().toUpperCase();
   if (!code) return groupMsg("Enter invite code", "error");
   try {
+    console.log("🔍 Searching for group with code:", code);
     const q = query(collection(db, "groups"), where("code", "==", code));
     const snap = await getDocs(q);
-    if (snap.empty) return groupMsg("Invalid code", "error");
+
+    if (snap.empty) {
+      console.error("❌ No group found with code:", code);
+      return groupMsg("Invalid code", "error");
+    }
+
     const gid = snap.docs[0].id;
-    await updateDoc(snap.docs[0].ref, { members: [...(snap.docs[0].data().members || []), currentUser.uid] });
+    const groupRef = snap.docs[0].ref;
+    const groupData = snap.docs[0].data();
+    const currentMembers = groupData.members || [];
+
+    console.log("✅ Found group:", gid);
+    console.log("📋 Current members in group:", currentMembers);
+    console.log("👤 Current user UID:", currentUser.uid);
+
+    // Check if user is already a member
+    if (currentMembers.includes(currentUser.uid)) {
+      console.warn("⚠️ User already in group");
+      return groupMsg("You are already a member of this group", "error");
+    }
+
+    // Add user to members array
+    const updatedMembers = [...currentMembers, currentUser.uid];
+    console.log("➕ Adding user to members. New members array:", updatedMembers);
+
+    // Update group document with new members using arrayUnion for safety
+    await updateDoc(groupRef, {
+      members: updatedMembers
+    });
+    console.log("✅ Group document updated with new members");
+
+    // Wait a moment for Firestore to sync
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Verify the update was successful by fetching fresh data
+    const verifySnap = await getDoc(groupRef);
+    const verifyData = verifySnap.data();
+    const verifyMembers = verifyData.members || [];
+    console.log("✅ Verification - Members in group after update:", verifyMembers);
+    console.log("✅ Verification - Total members:", verifyMembers.length);
+
+    if (!verifyMembers.includes(currentUser.uid)) {
+      console.error("❌ CRITICAL: User was not added to group!");
+      return groupMsg("Error: Failed to add you to group. Please try again.", "error");
+    }
+
+    // Update user document with groupId
     await updateDoc(doc(db, "users", currentUser.uid), { groupId: gid });
+    console.log("✅ User document updated with groupId");
+
     userDoc.groupId = gid;
     groupMsg("Joined! Loading...", "success");
-    await loadGroup(gid); setupListeners();
+
+    // Clear form
+    document.getElementById('joinCode').value = '';
+
+    await loadGroup(gid);
+    setupListeners();
+
     setTimeout(() => closeModal('groupModal'), 1200);
-  } catch (e) { groupMsg("Error joining group", "error"); }
+  } catch (e) {
+    console.error("❌ Error joining group:", e);
+    groupMsg("Error joining group: " + e.message, "error");
+  }
 };
 
 function groupMsg(msg, type) {
@@ -645,9 +1070,30 @@ window.openTaskModal = function (col) {
 };
 
 function populateAssigneeDropdown() {
-  const sel = document.getElementById('tskAssign'); if (!sel) return;
+  const sel = document.getElementById('tskAssign');
+  if (!sel) return;
+
   sel.innerHTML = '<option value="">Unassigned</option>';
-  groupMembers.forEach(m => { const o = document.createElement('option'); o.value = m.uid; o.textContent = m.name + (m.uid === currentUser.uid ? ' (you)' : ''); sel.appendChild(o); });
+
+  // Remove duplicates by using a Set to track UIDs
+  const seenUids = new Set();
+  const uniqueMembers = [];
+
+  for (const member of groupMembers) {
+    if (!seenUids.has(member.uid)) {
+      seenUids.add(member.uid);
+      uniqueMembers.push(member);
+    }
+  }
+
+  console.log("📋 Populating dropdown with", uniqueMembers.length, "unique members");
+
+  uniqueMembers.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.uid;
+    o.textContent = m.name + (m.uid === currentUser.uid ? ' (you)' : '');
+    sel.appendChild(o);
+  });
 }
 
 function populateDiscussionTaskDropdown(tasksList) {
@@ -1155,6 +1601,11 @@ function renderProgressCharts() {
     progressBarChart = new Chart(pBarCtx, { type: 'bar', data: { labels: groupMembers.slice(0, 5).map(m => m.name.split(' ')[0]), datasets: [{ data: groupMembers.slice(0, 5).map(m => m.points || 0), backgroundColor: ['#ff6b35', '#a78bfa', '#4ecdc4', '#ffd60a', '#60a5fa'], borderRadius: 6 }] }, options: { plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#7a7f9a', font: { size: 11 } } }, y: { display: false } } } });
   }
   renderInsights(); renderBurnoutMonitor();
+
+  // Load quiz stats
+  if (window.loadQuizStats) {
+    window.loadQuizStats();
+  }
 }
 
 function renderInsights() {
@@ -1661,6 +2112,20 @@ window.approveTask = async function (taskId) {
       updatedAt: serverTimestamp()
     });
 
+    // Send notification to task owner
+    if (task.assignedTo) {
+      await addDoc(collection(db, "users", task.assignedTo, "notifications"), {
+        type: "task_approved",
+        taskId: taskId,
+        taskTitle: task.title,
+        approvedBy: userDoc.name,
+        message: `${userDoc.name} approved your task: ${task.title}`,
+        isCompleted: newColumn === 'completed',
+        createdAt: serverTimestamp(),
+        read: false
+      });
+    }
+
     if (newColumn === 'completed') {
       const pts = task.points || POINTS.TASK_COMPLETE || 15;
       await awardPoints(pts, true);
@@ -1705,6 +2170,19 @@ window.rejectTask = async function (taskId) {
       approvals: [], // Clear approvals when rejected
       updatedAt: serverTimestamp()
     });
+
+    // Send notification to task owner
+    if (task.assignedTo) {
+      await addDoc(collection(db, "users", task.assignedTo, "notifications"), {
+        type: "task_rejected",
+        taskId: taskId,
+        taskTitle: task.title,
+        rejectedBy: userDoc.name,
+        message: `${userDoc.name} rejected your task: ${task.title}`,
+        createdAt: serverTimestamp(),
+        read: false
+      });
+    }
 
     await logActivity(`👎 ${userDoc.name} rejected task: ${task.title}`, 'rejection');
     toast("Task rejected and moved back to To Do", "success");
@@ -2058,23 +2536,41 @@ function getFileIcon(filename) {
 }
 
 window.submitProofAndComplete = async function () {
-  if (!window.currentProofTaskId) return toast("Task not found", "error");
-  if (!userDoc.groupId) return toast("Join a group first", "error");
+  console.log("=== SUBMITTING PROOF ===");
+  console.log("currentProofTaskId:", window.currentProofTaskId);
+  console.log("currentProofTaskType:", window.currentProofTaskType);
+  console.log("proofFiles:", window.proofFiles);
+
+  if (!window.currentProofTaskId) {
+    console.error("❌ Task ID not found");
+    return toast("Task not found", "error");
+  }
+
+  if (!userDoc.groupId) {
+    console.error("❌ User not in a group");
+    return toast("Join a group first", "error");
+  }
 
   const taskType = window.currentProofTaskType;
+  console.log("Task type:", taskType);
 
   // Validate proof based on task type
   if (taskType === 'learning') {
     if (!window.proofFiles.learning) {
+      console.error("❌ No learning proof file");
       return toast("Please upload a quiz result screenshot", "error");
     }
+    console.log("✅ Learning proof file found:", window.proofFiles.learning.name);
   } else if (taskType === 'creation') {
     if (window.proofFiles.creation.length === 0) {
+      console.error("❌ No creation proof files");
       return toast("Please upload at least one work file", "error");
     }
+    console.log("✅ Creation proof files found:", window.proofFiles.creation.length);
   }
 
   try {
+    console.log("📝 Preparing to submit task...");
     const taskRef = doc(db, "groups", userDoc.groupId, "tasks", window.currentProofTaskId);
 
     // Prepare files with data for storage
@@ -2082,6 +2578,7 @@ window.submitProofAndComplete = async function () {
 
     if (taskType === 'learning') {
       const file = window.proofFiles.learning;
+      console.log("📄 Processing learning file:", file.name);
       const reader = new FileReader();
       await new Promise((resolve, reject) => {
         reader.onload = () => {
@@ -2091,6 +2588,7 @@ window.submitProofAndComplete = async function () {
             size: file.size,
             data: reader.result
           });
+          console.log("✅ File processed:", file.name);
           resolve();
         };
         reader.onerror = reject;
@@ -2098,6 +2596,7 @@ window.submitProofAndComplete = async function () {
       });
     } else if (taskType === 'creation') {
       for (const file of window.proofFiles.creation) {
+        console.log("📄 Processing creation file:", file.name);
         const reader = new FileReader();
         await new Promise((resolve, reject) => {
           reader.onload = () => {
@@ -2107,6 +2606,7 @@ window.submitProofAndComplete = async function () {
               size: file.size,
               data: reader.result
             });
+            console.log("✅ File processed:", file.name);
             resolve();
           };
           reader.onerror = reject;
@@ -2115,6 +2615,7 @@ window.submitProofAndComplete = async function () {
       }
     }
 
+    console.log("📤 Uploading to Firestore...");
     await updateDoc(taskRef, {
       column: 'pending_peer_approval',
       type: taskType,
@@ -2122,13 +2623,15 @@ window.submitProofAndComplete = async function () {
       updatedAt: serverTimestamp()
     });
 
+    console.log("✅ Task updated in Firestore");
     await logActivity(`📋 ${userDoc.name} submitted task for approval: ${document.getElementById('proofTaskTitle').textContent}`, 'pending');
     toast("Task submitted for peer approval!", "success");
     closeModal('proofSubmissionModal');
     renderKanban();
+    console.log("✅ Submission complete");
   } catch (e) {
-    console.error(e);
-    toast("Error submitting task", "error");
+    console.error("❌ Error submitting task:", e);
+    toast("Error submitting task: " + e.message, "error");
   }
 };
 

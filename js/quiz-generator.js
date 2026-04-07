@@ -93,333 +93,33 @@ function startQuizCreation() {
 }
 
 function fetchQuizQuestions(topic, numQuestions, difficulty) {
-    // Map difficulty to API parameter
-    var difficultyMap = {
-        'easy': 'easy',
-        'medium': 'medium',
-        'hard': 'hard'
-    };
-
-    var diffParam = difficultyMap[difficulty] || '';
-
-    // Build API URL
-    var url = 'https://opentdb.com/api.php?amount=' + numQuestions + '&type=multiple';
-
-    if (diffParam) {
-        url += '&difficulty=' + diffParam;
+    // Use Cohere API to generate quiz questions
+    if (!window.generateQuizWithCohere) {
+        alert('Cohere API not loaded. Please refresh the page.');
+        return;
     }
 
-    // Comprehensive category map for Open Trivia Database
-    var categoryMap = {
-        // Original categories
-        'science': 17,
-        'history': 23,
-        'geography': 22,
-        'sports': 21,
-        'entertainment': 11,
-        'general': 9,
-        'general knowledge': 9,
-        'math': 19,
-        'mathematics': 19,
-        'technology': 18,
-        'literature': 26,
-        'music': 12,
-        'movies': 11,
-        'film': 11,
-        'animals': 27,
-        'vehicles': 28,
-        'politics': 24,
-
-        // Additional categories
-        'biology': 17,
-        'chemistry': 17,
-        'physics': 17,
-        'nature': 17,
-        'earth': 22,
-        'world': 22,
-        'countries': 22,
-        'cities': 22,
-        'art': 25,
-        'mythology': 20,
-        'mythology & legends': 20,
-        'legends': 20,
-        'tv': 14,
-        'television': 14,
-        'board games': 16,
-        'games': 16,
-        'video games': 15,
-        'comics': 29,
-        'cartoon': 32,
-        'anime': 31,
-        'manga': 31,
-        'books': 26,
-        'novels': 26,
-        'poetry': 26,
-        'celebrities': 26,
-        'famous people': 26,
-        'royalty': 24,
-        'government': 24,
-        'law': 24,
-        'economics': 24,
-        'business': 24,
-        'finance': 24,
-        'money': 24,
-        'stocks': 24,
-        'trading': 24,
-        'cars': 28,
-        'motorcycles': 28,
-        'trains': 28,
-        'planes': 28,
-        'aviation': 28,
-        'ships': 28,
-        'boats': 28,
-        'insects': 27,
-        'birds': 27,
-        'fish': 27,
-        'reptiles': 27,
-        'mammals': 27,
-        'dinosaurs': 27,
-        'pets': 27,
-        'dogs': 27,
-        'cats': 27,
-        'horses': 27,
-        'food': 21,
-        'cooking': 21,
-        'recipes': 21,
-        'cuisine': 21,
-        'restaurants': 21,
-        'drinks': 21,
-        'beverages': 21,
-        'wine': 21,
-        'beer': 21,
-        'cocktails': 21,
-        'sports & leisure': 21,
-        'football': 21,
-        'soccer': 21,
-        'basketball': 21,
-        'baseball': 21,
-        'tennis': 21,
-        'golf': 21,
-        'hockey': 21,
-        'boxing': 21,
-        'wrestling': 21,
-        'martial arts': 21,
-        'olympics': 21,
-        'fitness': 21,
-        'health': 21,
-        'medicine': 21,
-        'anatomy': 21,
-        'psychology': 17,
-        'sociology': 17,
-        'anthropology': 17,
-        'archaeology': 23,
-        'ancient': 23,
-        'medieval': 23,
-        'renaissance': 23,
-        'modern': 23,
-        'contemporary': 23,
-        'war': 23,
-        'military': 23,
-        'battles': 23,
-        'revolution': 23,
-        'culture': 23,
-        'traditions': 23,
-        'religion': 23,
-        'philosophy': 23,
-        'ethics': 23,
-        'logic': 19,
-        'algebra': 19,
-        'geometry': 19,
-        'calculus': 19,
-        'statistics': 19,
-        'probability': 19,
-        'programming': 18,
-        'coding': 18,
-        'software': 18,
-        'hardware': 18,
-        'computers': 18,
-        'internet': 18,
-        'web': 18,
-        'apps': 18,
-        'mobile': 18,
-        'artificial intelligence': 18,
-        'ai': 18,
-        'machine learning': 18,
-        'robotics': 18,
-        'engineering': 18,
-        'architecture': 18,
-        'design': 18,
-        'dsa': 18,
-        'data structures': 18,
-        'data structures and algorithms': 18,
-        'algorithms': 18,
-        'database': 18,
-        'databases': 18,
-        'sql': 18,
-        'python': 18,
-        'java': 18,
-        'javascript': 18,
-        'c++': 18,
-        'cpp': 18,
-        'csharp': 18,
-        'c#': 18,
-        'ruby': 18,
-        'php': 18,
-        'golang': 18,
-        'go': 18,
-        'rust': 18,
-        'swift': 18,
-        'kotlin': 18,
-        'typescript': 18,
-        'react': 18,
-        'angular': 18,
-        'vue': 18,
-        'nodejs': 18,
-        'node.js': 18,
-        'express': 18,
-        'django': 18,
-        'flask': 18,
-        'spring': 18,
-        'docker': 18,
-        'kubernetes': 18,
-        'devops': 18,
-        'cloud': 18,
-        'aws': 18,
-        'azure': 18,
-        'gcp': 18,
-        'git': 18,
-        'github': 18,
-        'gitlab': 18,
-        'linux': 18,
-        'unix': 18,
-        'windows': 18,
-        'macos': 18,
-        'cybersecurity': 18,
-        'security': 18,
-        'hacking': 18,
-        'network': 18,
-        'networking': 18,
-        'fashion': 11,
-        'beauty': 11,
-        'makeup': 11,
-        'photography': 11,
-        'theater': 11,
-        'dance': 11,
-        'comedy': 11,
-        'drama': 11,
-        'action': 11,
-        'horror': 11,
-        'thriller': 11,
-        'romance': 11,
-        'adventure': 11,
-        'fantasy': 11,
-        'science fiction': 11,
-        'scifi': 11,
-        'western': 11,
-        'animation': 11,
-        'documentary': 11,
-        'sports movies': 11,
-        'musicals': 11,
-        'actors': 11,
-        'directors': 11,
-        'producers': 11,
-        'screenwriters': 11,
-        'oscar': 11,
-        'awards': 11,
-        'grammy': 12,
-        'billboard': 12,
-        'concerts': 12,
-        'bands': 12,
-        'artists': 12,
-        'singers': 12,
-        'rock': 12,
-        'pop': 12,
-        'hip hop': 12,
-        'rap': 12,
-        'jazz': 12,
-        'classical': 12,
-        'country': 12,
-        'folk': 12,
-        'blues': 12,
-        'reggae': 12,
-        'metal': 12,
-        'punk': 12,
-        'electronic': 12,
-        'dance music': 12,
-        'house': 12,
-        'techno': 12,
-        'indie': 12,
-        'alternative': 12,
-        'rnb': 12,
-        'soul': 12,
-        'gospel': 12,
-        'opera': 12,
-        'musical instruments': 12,
-        'guitar': 12,
-        'piano': 12,
-        'drums': 12,
-        'violin': 12,
-        'trumpet': 12
-    };
-
-    // Try to find exact match first
-    var categoryId = categoryMap[topic.toLowerCase()];
-
-    // If no exact match, try fuzzy matching
-    if (!categoryId) {
-        var topicLower = topic.toLowerCase();
-        var bestMatch = null;
-        var bestScore = 0;
-
-        for (var key in categoryMap) {
-            if (key.includes(topicLower) || topicLower.includes(key)) {
-                bestMatch = key;
-                bestScore = Math.max(bestScore, 1);
-            }
-        }
-
-        if (bestMatch) {
-            categoryId = categoryMap[bestMatch];
-            console.log('Fuzzy matched "' + topic + '" to "' + bestMatch + '"');
-        }
-    }
-
-    if (categoryId) {
-        url += '&category=' + categoryId;
-    } else {
-        console.log('No category match found for "' + topic + '", using general knowledge');
-    }
-
-    fetch(url)
-        .then(function (response) {
-            if (!response.ok) throw new Error('Failed to fetch quiz');
-            return response.json();
-        })
-        .then(function (data) {
-            if (data.response_code !== 0) {
-                throw new Error('No questions found for this topic. Try a different topic or difficulty level.');
-            }
-
-            // Process questions
-            var questions = data.results.map(function (q) {
-                var allAnswers = [q.correct_answer].concat(q.incorrect_answers);
-                // Shuffle answers
+    window.generateQuizWithCohere(topic, difficulty, numQuestions)
+        .then(function (questions) {
+            // Shuffle answers for each question
+            var processedQuestions = questions.map(function (q) {
+                var allAnswers = q.options.slice();
                 allAnswers = shuffleArray(allAnswers);
 
                 return {
-                    question: decodeHtml(q.question),
-                    answers: allAnswers.map(function (a) { return decodeHtml(a); }),
-                    correctAnswer: decodeHtml(q.correct_answer),
-                    difficulty: q.difficulty,
-                    category: q.category
+                    question: q.question,
+                    answers: allAnswers,
+                    correctAnswer: q.correctAnswer,
+                    difficulty: difficulty,
+                    category: topic
                 };
             });
 
             currentQuiz = {
                 topic: topic,
                 difficulty: difficulty,
-                totalQuestions: questions.length,
-                questions: questions
+                totalQuestions: processedQuestions.length,
+                questions: processedQuestions
             };
 
             currentQuestionIndex = 0;
@@ -430,7 +130,7 @@ function fetchQuizQuestions(topic, numQuestions, difficulty) {
             displayQuiz();
         })
         .catch(function (error) {
-            console.error('Quiz fetch error:', error);
+            console.error('Quiz generation error:', error);
             var loadingDiv = document.getElementById('quizLoading');
             if (loadingDiv) {
                 loadingDiv.style.display = 'none';
@@ -439,7 +139,7 @@ function fetchQuizQuestions(topic, numQuestions, difficulty) {
             if (creationForm) {
                 creationForm.style.display = 'block';
             }
-            alert('Error: ' + error.message + '. Try a different topic or difficulty level.');
+            alert('Error generating quiz: ' + error.message + '. Please try again.');
         });
 }
 
@@ -528,27 +228,44 @@ function selectAnswerByIndex(answerIndex) {
         }
     }
 
-    // Show next button
+    // Show next button and update text based on whether it's the last question
     var nextBtn = document.getElementById('quizNextBtn');
     if (nextBtn) {
         nextBtn.style.display = 'block';
+
+        var btn = nextBtn.querySelector('button');
+        if (btn) {
+            // Check if this is the last question
+            if (currentQuestionIndex >= currentQuiz.questions.length - 1) {
+                // Last question - show Submit button
+                btn.innerHTML = '<span>Submit Quiz</span><i class="fa-solid fa-check"></i>';
+            } else {
+                // Not last question - show Next Question button
+                btn.innerHTML = '<span>Next Question</span><i class="fa-solid fa-arrow-right"></i>';
+            }
+        }
     }
 }
 
 function nextQuestion() {
     currentQuestionIndex++;
-    displayQuiz();
+    if (currentQuestionIndex >= currentQuiz.questions.length) {
+        displayQuizResults();
+    } else {
+        displayQuiz();
+    }
 }
 
 function displayQuizResults() {
-    // Close modal and show results in results section
-    closeQuizModal();
-
-    var resultsSection = document.getElementById('quizResultsSection');
-    if (!resultsSection) return;
-
     var percentage = Math.round((quizScore / currentQuiz.totalQuestions) * 100);
     var grade = percentage >= 80 ? 'A' : percentage >= 60 ? 'B' : percentage >= 40 ? 'C' : 'F';
+
+    console.log("=== QUIZ COMPLETED ===");
+    console.log("Topic:", currentQuiz.topic);
+    console.log("Difficulty:", currentQuiz.difficulty);
+    console.log("Total Questions:", currentQuiz.totalQuestions);
+    console.log("Correct Answers:", quizScore);
+    console.log("Percentage:", percentage);
 
     var html = '<div class="quiz-results-page">';
     html += '<div class="quiz-results-header">';
@@ -588,8 +305,41 @@ function displayQuizResults() {
 
     html += '</div>';
 
-    resultsSection.innerHTML = html;
-    resultsSection.style.display = 'block';
+    // Close modal first
+    closeQuizModal();
+
+    // Update results section
+    var resultsSection = document.getElementById('quizResultsSection');
+    if (resultsSection) {
+        resultsSection.innerHTML = html;
+        resultsSection.style.display = 'block';
+    }
+
+    // Save result to Firestore
+    console.log("Attempting to save quiz result...");
+
+    // Try using window.saveQuizResult if available
+    if (window.saveQuizResult) {
+        console.log("Using window.saveQuizResult");
+        window.saveQuizResult(currentQuiz.topic, currentQuiz.difficulty, currentQuiz.totalQuestions, quizScore)
+            .then(function (result) {
+                console.log("✅ Quiz result saved successfully:", result);
+            })
+            .catch(function (error) {
+                console.error("❌ Failed to save quiz result:", error);
+            });
+    } else {
+        console.warn("⚠️ window.saveQuizResult not available, trying direct Firestore save...");
+        // Fallback: Try direct Firestore save
+        saveQuizResultDirect(currentQuiz.topic, currentQuiz.difficulty, currentQuiz.totalQuestions, quizScore);
+    }
+
+    // Switch to Results tab
+    setTimeout(function () {
+        if (window.switchQuizTab) {
+            window.switchQuizTab('results');
+        }
+    }, 50);
 }
 
 function retakeQuiz() {
@@ -677,5 +427,60 @@ window.selectAnswerByIndex = selectAnswerByIndex;
 window.nextQuestion = nextQuestion;
 window.retakeQuiz = retakeQuiz;
 window.clearQuizResults = clearQuizResults;
+
+/**
+ * Direct Firestore save - fallback if window.saveQuizResult not available
+ */
+async function saveQuizResultDirect(topic, difficulty, totalQuestions, correctAnswers) {
+    try {
+        console.log("🔴 DIRECT FIRESTORE SAVE - Fallback method");
+
+        if (!window.currentUser || !window.currentUser.uid) {
+            console.error("❌ User not authenticated");
+            return;
+        }
+
+        if (!window.db) {
+            console.error("❌ Firestore not available");
+            return;
+        }
+
+        if (!window.firebaseModules) {
+            console.error("❌ Firebase modules not available");
+            return;
+        }
+
+        const { collection, addDoc } = window.firebaseModules;
+        const percentage = Math.round((correctAnswers / totalQuestions) * 100);
+
+        const quizData = {
+            userId: window.currentUser.uid,
+            userName: window.currentUser.displayName || "User",
+            topic: String(topic).trim(),
+            difficulty: String(difficulty).trim(),
+            totalQuestions: Number(totalQuestions),
+            correctAnswers: Number(correctAnswers),
+            percentage: percentage,
+            timestamp: new Date().toISOString(),
+            createdAt: new Date()
+        };
+
+        console.log("📝 Saving directly to Firestore:", quizData);
+        const quizResultsRef = collection(window.db, 'quiz_results');
+        const docRef = await addDoc(quizResultsRef, quizData);
+        console.log("✅ DIRECT SAVE SUCCESS! Document ID:", docRef.id);
+
+        // Reload results if function available
+        if (window.loadQuizResults && window.displayQuizResultsInTab) {
+            await window.loadQuizResults();
+            window.displayQuizResultsInTab();
+        }
+
+    } catch (error) {
+        console.error("❌ DIRECT SAVE FAILED:", error);
+    }
+}
+
+window.saveQuizResultDirect = saveQuizResultDirect;
 
 console.log("✅ quiz-generator.js loaded successfully");
