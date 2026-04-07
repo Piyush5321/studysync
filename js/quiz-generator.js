@@ -12,6 +12,43 @@ function initQuizGenerator() {
 }
 
 function openQuizModal() {
+    // Reset quiz state when opening modal
+    currentQuestionIndex = 0;
+    quizScore = 0;
+    userAnswers = [];
+    quizStarted = false;
+    currentQuiz = null;
+
+    // Clear the quiz container
+    var quizContainer = document.getElementById('quizContainer');
+    if (quizContainer) {
+        quizContainer.innerHTML = '';
+    }
+
+    // Show the creation form
+    var creationForm = document.getElementById('quizCreationForm');
+    if (creationForm) {
+        creationForm.style.display = 'block';
+    }
+
+    // Hide loading
+    var loadingDiv = document.getElementById('quizLoading');
+    if (loadingDiv) {
+        loadingDiv.style.display = 'none';
+    }
+
+    // Hide next button
+    var nextBtn = document.getElementById('quizNextBtn');
+    if (nextBtn) {
+        nextBtn.style.display = 'none';
+    }
+
+    // Reset form fields
+    document.getElementById('quizTopic').value = '';
+    document.getElementById('quizNumQuestions').value = '10';
+    document.getElementById('quizDifficulty').value = 'medium';
+
+    // Open the modal
     var modal = document.getElementById('quizModal');
     if (modal) {
         modal.classList.remove('hidden');
@@ -72,27 +109,285 @@ function fetchQuizQuestions(topic, numQuestions, difficulty) {
         url += '&difficulty=' + diffParam;
     }
 
-    // Add category based on topic (optional - using general knowledge if not found)
+    // Comprehensive category map for Open Trivia Database
     var categoryMap = {
+        // Original categories
         'science': 17,
         'history': 23,
         'geography': 22,
         'sports': 21,
         'entertainment': 11,
         'general': 9,
+        'general knowledge': 9,
         'math': 19,
+        'mathematics': 19,
         'technology': 18,
         'literature': 26,
         'music': 12,
         'movies': 11,
+        'film': 11,
         'animals': 27,
         'vehicles': 28,
-        'politics': 24
+        'politics': 24,
+
+        // Additional categories
+        'biology': 17,
+        'chemistry': 17,
+        'physics': 17,
+        'nature': 17,
+        'earth': 22,
+        'world': 22,
+        'countries': 22,
+        'cities': 22,
+        'art': 25,
+        'mythology': 20,
+        'mythology & legends': 20,
+        'legends': 20,
+        'tv': 14,
+        'television': 14,
+        'board games': 16,
+        'games': 16,
+        'video games': 15,
+        'comics': 29,
+        'cartoon': 32,
+        'anime': 31,
+        'manga': 31,
+        'books': 26,
+        'novels': 26,
+        'poetry': 26,
+        'celebrities': 26,
+        'famous people': 26,
+        'royalty': 24,
+        'government': 24,
+        'law': 24,
+        'economics': 24,
+        'business': 24,
+        'finance': 24,
+        'money': 24,
+        'stocks': 24,
+        'trading': 24,
+        'cars': 28,
+        'motorcycles': 28,
+        'trains': 28,
+        'planes': 28,
+        'aviation': 28,
+        'ships': 28,
+        'boats': 28,
+        'insects': 27,
+        'birds': 27,
+        'fish': 27,
+        'reptiles': 27,
+        'mammals': 27,
+        'dinosaurs': 27,
+        'pets': 27,
+        'dogs': 27,
+        'cats': 27,
+        'horses': 27,
+        'food': 21,
+        'cooking': 21,
+        'recipes': 21,
+        'cuisine': 21,
+        'restaurants': 21,
+        'drinks': 21,
+        'beverages': 21,
+        'wine': 21,
+        'beer': 21,
+        'cocktails': 21,
+        'sports & leisure': 21,
+        'football': 21,
+        'soccer': 21,
+        'basketball': 21,
+        'baseball': 21,
+        'tennis': 21,
+        'golf': 21,
+        'hockey': 21,
+        'boxing': 21,
+        'wrestling': 21,
+        'martial arts': 21,
+        'olympics': 21,
+        'fitness': 21,
+        'health': 21,
+        'medicine': 21,
+        'anatomy': 21,
+        'psychology': 17,
+        'sociology': 17,
+        'anthropology': 17,
+        'archaeology': 23,
+        'ancient': 23,
+        'medieval': 23,
+        'renaissance': 23,
+        'modern': 23,
+        'contemporary': 23,
+        'war': 23,
+        'military': 23,
+        'battles': 23,
+        'revolution': 23,
+        'culture': 23,
+        'traditions': 23,
+        'religion': 23,
+        'philosophy': 23,
+        'ethics': 23,
+        'logic': 19,
+        'algebra': 19,
+        'geometry': 19,
+        'calculus': 19,
+        'statistics': 19,
+        'probability': 19,
+        'programming': 18,
+        'coding': 18,
+        'software': 18,
+        'hardware': 18,
+        'computers': 18,
+        'internet': 18,
+        'web': 18,
+        'apps': 18,
+        'mobile': 18,
+        'artificial intelligence': 18,
+        'ai': 18,
+        'machine learning': 18,
+        'robotics': 18,
+        'engineering': 18,
+        'architecture': 18,
+        'design': 18,
+        'dsa': 18,
+        'data structures': 18,
+        'data structures and algorithms': 18,
+        'algorithms': 18,
+        'database': 18,
+        'databases': 18,
+        'sql': 18,
+        'python': 18,
+        'java': 18,
+        'javascript': 18,
+        'c++': 18,
+        'cpp': 18,
+        'csharp': 18,
+        'c#': 18,
+        'ruby': 18,
+        'php': 18,
+        'golang': 18,
+        'go': 18,
+        'rust': 18,
+        'swift': 18,
+        'kotlin': 18,
+        'typescript': 18,
+        'react': 18,
+        'angular': 18,
+        'vue': 18,
+        'nodejs': 18,
+        'node.js': 18,
+        'express': 18,
+        'django': 18,
+        'flask': 18,
+        'spring': 18,
+        'docker': 18,
+        'kubernetes': 18,
+        'devops': 18,
+        'cloud': 18,
+        'aws': 18,
+        'azure': 18,
+        'gcp': 18,
+        'git': 18,
+        'github': 18,
+        'gitlab': 18,
+        'linux': 18,
+        'unix': 18,
+        'windows': 18,
+        'macos': 18,
+        'cybersecurity': 18,
+        'security': 18,
+        'hacking': 18,
+        'network': 18,
+        'networking': 18,
+        'fashion': 11,
+        'beauty': 11,
+        'makeup': 11,
+        'photography': 11,
+        'theater': 11,
+        'dance': 11,
+        'comedy': 11,
+        'drama': 11,
+        'action': 11,
+        'horror': 11,
+        'thriller': 11,
+        'romance': 11,
+        'adventure': 11,
+        'fantasy': 11,
+        'science fiction': 11,
+        'scifi': 11,
+        'western': 11,
+        'animation': 11,
+        'documentary': 11,
+        'sports movies': 11,
+        'musicals': 11,
+        'actors': 11,
+        'directors': 11,
+        'producers': 11,
+        'screenwriters': 11,
+        'oscar': 11,
+        'awards': 11,
+        'grammy': 12,
+        'billboard': 12,
+        'concerts': 12,
+        'bands': 12,
+        'artists': 12,
+        'singers': 12,
+        'rock': 12,
+        'pop': 12,
+        'hip hop': 12,
+        'rap': 12,
+        'jazz': 12,
+        'classical': 12,
+        'country': 12,
+        'folk': 12,
+        'blues': 12,
+        'reggae': 12,
+        'metal': 12,
+        'punk': 12,
+        'electronic': 12,
+        'dance music': 12,
+        'house': 12,
+        'techno': 12,
+        'indie': 12,
+        'alternative': 12,
+        'rnb': 12,
+        'soul': 12,
+        'gospel': 12,
+        'opera': 12,
+        'musical instruments': 12,
+        'guitar': 12,
+        'piano': 12,
+        'drums': 12,
+        'violin': 12,
+        'trumpet': 12
     };
 
+    // Try to find exact match first
     var categoryId = categoryMap[topic.toLowerCase()];
+
+    // If no exact match, try fuzzy matching
+    if (!categoryId) {
+        var topicLower = topic.toLowerCase();
+        var bestMatch = null;
+        var bestScore = 0;
+
+        for (var key in categoryMap) {
+            if (key.includes(topicLower) || topicLower.includes(key)) {
+                bestMatch = key;
+                bestScore = Math.max(bestScore, 1);
+            }
+        }
+
+        if (bestMatch) {
+            categoryId = categoryMap[bestMatch];
+            console.log('Fuzzy matched "' + topic + '" to "' + bestMatch + '"');
+        }
+    }
+
     if (categoryId) {
         url += '&category=' + categoryId;
+    } else {
+        console.log('No category match found for "' + topic + '", using general knowledge');
     }
 
     fetch(url)
@@ -102,7 +397,7 @@ function fetchQuizQuestions(topic, numQuestions, difficulty) {
         })
         .then(function (data) {
             if (data.response_code !== 0) {
-                throw new Error('No questions found for this topic');
+                throw new Error('No questions found for this topic. Try a different topic or difficulty level.');
             }
 
             // Process questions
@@ -190,7 +485,7 @@ function displayQuiz() {
     for (var i = 0; i < question.answers.length; i++) {
         var answer = question.answers[i];
         var isCorrect = answer === question.correctAnswer;
-        html += '<button class="quiz-answer-btn" onclick="selectAnswer(\'' + escapeHtmlAttr(answer) + '\', ' + isCorrect + ')">';
+        html += '<button class="quiz-answer-btn" data-answer-index="' + i + '" onclick="window.selectAnswerByIndex(' + i + ')">';
         html += '<span class="quiz-answer-letter">' + String.fromCharCode(65 + i) + '</span>';
         html += '<span class="quiz-answer-text">' + escapeHtml(answer) + '</span>';
         html += '</button>';
@@ -200,8 +495,10 @@ function displayQuiz() {
     quizContainer.innerHTML = html;
 }
 
-function selectAnswer(answer, isCorrect) {
+function selectAnswerByIndex(answerIndex) {
     var question = currentQuiz.questions[currentQuestionIndex];
+    var answer = question.answers[answerIndex];
+    var isCorrect = answer === question.correctAnswer;
 
     userAnswers.push({
         question: question.question,
@@ -220,12 +517,13 @@ function selectAnswer(answer, isCorrect) {
         buttons[i].disabled = true;
     }
 
-    // Highlight correct answer
+    // Highlight correct and incorrect answers
     for (var i = 0; i < buttons.length; i++) {
-        if (buttons[i].textContent.includes(question.correctAnswer)) {
+        var btnAnswer = question.answers[i];
+        if (btnAnswer === question.correctAnswer) {
             buttons[i].classList.add('correct');
         }
-        if (buttons[i].textContent.includes(answer) && !isCorrect) {
+        if (i === answerIndex && !isCorrect) {
             buttons[i].classList.add('incorrect');
         }
     }
@@ -375,7 +673,7 @@ window.initQuizGenerator = initQuizGenerator;
 window.openQuizModal = openQuizModal;
 window.closeQuizModal = closeQuizModal;
 window.startQuizCreation = startQuizCreation;
-window.selectAnswer = selectAnswer;
+window.selectAnswerByIndex = selectAnswerByIndex;
 window.nextQuestion = nextQuestion;
 window.retakeQuiz = retakeQuiz;
 window.clearQuizResults = clearQuizResults;

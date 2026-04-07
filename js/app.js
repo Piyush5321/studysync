@@ -10,7 +10,6 @@ import { getDatabase, ref, set, remove, onValue } from "https://www.gstatic.com/
 import { initDoubtSolver, askDoubt } from './ai-doubt-solver.js';
 import { prioritizeTasks, displayPrioritization } from './ai-task-prioritizer.js';
 import { analyzePredictivePerformance, renderPredictions } from './ai-predictions.js';
-import { initializeAIConfig, setAIApiKey, getAIApiKey } from './ai-config.js';
 
 // ⚠️ Replace with your actual Firebase project credentials
 const firebaseConfig = {
@@ -43,6 +42,7 @@ let groupMembers = [], tasks = [], events = [], resources = [], activity = [];
 let calDate = new Date(), calView = 'month';
 let editingEventId = null, editingTaskId = null, selectedColor = '#ff6b35';
 let uploadingFile = false;
+let pendingApprovalFilter = 'all'; // Filter for pending approval tasks: 'all', 'mine', 'others'
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'index.html'; return; }
@@ -50,6 +50,13 @@ onAuthStateChanged(auth, async (user) => {
   await loadUserDoc();
   initUI();
   setupListeners();
+
+  // Auto-sync data after 2 seconds to ensure real-time listeners are set up
+  setTimeout(() => {
+    if (window.refreshAllData) {
+      window.refreshAllData();
+    }
+  }, 2000);
 });
 
 async function loadUserDoc() {
@@ -102,7 +109,6 @@ function initUI() {
   else { openGroupModal(); document.getElementById('smartMsg').textContent = "Set up your study group to get started!"; }
   renderMiniCalendar();
   renderCalendar();
-  initializeAIConfig();
   initDoubtSolver(currentUser);
   // Initialize study tracker
   if (window.initStudyTracker) {
@@ -119,6 +125,16 @@ function initUI() {
   // Initialize Task Proof Verification
   if (window.initTaskProofVerification) {
     window.initTaskProofVerification(db, currentUser, userDoc.groupId);
+  }
+  // Initialize Quiz Task Verification
+  if (window.initQuizTaskVerification) {
+    window.initQuizTaskVerification(db, currentUser, userDoc.groupId);
+    // Load verification results after a short delay to ensure modules are ready
+    setTimeout(function () {
+      if (window.loadVerificationResults) {
+        window.loadVerificationResults();
+      }
+    }, 500);
   }
   // Group discussion will be initialized after group members are loaded
 }
@@ -189,6 +205,11 @@ async function loadGroupMembers(gid) {
   if (window.initGroupDiscussion) {
     window.initGroupDiscussion(db, currentUser, userDoc.groupId, tasks, groupMembers);
   }
+
+  // Load verification results after group is loaded
+  if (window.loadVerificationResults) {
+    window.loadVerificationResults();
+  }
 }
 
 // ===== MY TASKS RENDER =====
@@ -252,6 +273,62 @@ window.toggleSidebar = function () {
 
 window.handleLogout = async function () { await signOut(auth); window.location.href = 'index.html'; };
 
+// Refresh all data from Firebase
+window.refreshAllData = async function () {
+  try {
+    toast("Syncing data...", "info");
+
+    if (!userDoc.groupId) return toast("Join a group first", "error");
+    const gid = userDoc.groupId;
+
+    // Fetch fresh data from Firebase
+    const tasksSnap = await getDocs(query(collection(db, "groups", gid, "tasks"), orderBy("createdAt", "desc")));
+    tasks = tasksSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    window.tasksGlobal = tasks;
+
+    const eventsSnap = await getDocs(query(collection(db, "groups", gid, "events"), orderBy("date")));
+    events = eventsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const resourcesSnap = await getDocs(query(collection(db, "groups", gid, "resources"), orderBy("createdAt", "desc")));
+    resources = resourcesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const activitySnap = await getDocs(query(collection(db, "groups", gid, "activity"), orderBy("createdAt", "desc")));
+    activity = activitySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Re-render all UI
+    renderKanban();
+    renderTaskSummary();
+    renderDashboardTaskBadge();
+    renderSmartPlanner();
+    renderProgressCharts();
+    renderCalendar();
+    renderMiniCalendar();
+    renderTodayEvents();
+    renderResources();
+    buildResourceFilters();
+    renderActivity();
+
+    if (window.updateStudyTrackerTasks) {
+      window.updateStudyTrackerTasks(tasks, groupMembers);
+    }
+    if (window.updateGroupDiscussionData) {
+      window.updateGroupDiscussionData(tasks, groupMembers);
+    }
+    if (window.renderMyTasks) {
+      window.renderMyTasks();
+    }
+    if (window.renderLiveStudy) {
+      window.renderLiveStudy();
+    }
+
+    populateDiscussionTaskDropdown(tasks);
+    toast("Data synced successfully!", "success");
+  } catch (e) {
+    console.error("Error refreshing data:", e);
+    toast("Error syncing data", "error");
+  }
+};
+
 // Export functions to window
 // These are delegated to study-tracker.js
 window.refreshLiveStudy = function () {
@@ -283,7 +360,103 @@ function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 window.openModal = openModal;
 window.closeModal = closeModal;
 
+window.filterPendingApproval = function (filter, buttonEl) {
+  pendingApprovalFilter = filter;
+
+  // Update button styles
+  const buttons = document.querySelectorAll('.kanban-filter-btn');
+  buttons.forEach(btn => {
+    btn.style.background = 'var(--surface2)';
+    btn.style.color = 'var(--text)';
+    btn.style.border = '1px solid var(--border)';
+  });
+
+  // Highlight active button
+  if (buttonEl) {
+    buttonEl.style.background = 'var(--accent)';
+    buttonEl.style.color = 'white';
+    buttonEl.style.border = 'none';
+  }
+
+  renderKanban();
+};
+
 window.openGroupModal = function () { openModal('groupModal'); };
+window.openGroupDetailsModal = function () {
+  if (!userDoc.groupId) {
+    toast("You are not in a group", "error");
+    return;
+  }
+
+  const groupName = groupDoc?.name || "Study Group";
+  const groupSubject = groupDoc?.subject || "N/A";
+  const groupCode = groupDoc?.code || "N/A";
+  const totalMembers = groupMembers.length;
+
+  let html = `
+    <div style="padding: 20px;">
+      <div style="margin-bottom: 24px;">
+        <h3 style="margin: 0 0 8px 0; font-size: 18px; color: var(--text);">${escapeHtml(groupName)}</h3>
+        <p style="margin: 0; font-size: 13px; color: var(--text-muted);">${escapeHtml(groupSubject)}</p>
+      </div>
+
+      <div style="background: var(--surface2); padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span style="font-size: 13px; color: var(--text-muted);">Invite Code</span>
+          <span style="font-family: monospace; font-weight: 600; color: var(--accent); font-size: 14px;">${escapeHtml(groupCode)}</span>
+        </div>
+        <button class="btn-small" onclick="window.copyGroupCode('${groupCode}')" style="width: 100%; padding: 8px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;">
+          <i class="fa-solid fa-copy"></i> Copy Code
+        </button>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-users"></i> Team Members (${totalMembers})
+        </h4>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+  `;
+
+  groupMembers.forEach(member => {
+    const isCurrentUser = member.uid === currentUser.uid;
+    const avatar = member.name?.charAt(0).toUpperCase() || "?";
+    html += `
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border);">
+        <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">
+          ${avatar}
+        </div>
+        <div style="flex: 1;">
+          <div style="font-size: 13px; font-weight: 500; color: var(--text);">
+            ${escapeHtml(member.name || "Unknown")}
+            ${isCurrentUser ? '<span style="margin-left: 8px; font-size: 11px; background: var(--accent); color: white; padding: 2px 6px; border-radius: 3px; font-weight: 600;">You</span>' : ''}
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted);">${member.points || 0} pts</div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+        </div>
+      </div>
+
+      <button class="btn-primary" onclick="closeModal('groupDetailsModal')" style="width: 100%; padding: 10px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">
+        Close
+      </button>
+    </div>
+  `;
+
+  document.getElementById('groupDetailsContent').innerHTML = html;
+  openModal('groupDetailsModal');
+};
+
+window.copyGroupCode = function (code) {
+  navigator.clipboard.writeText(code).then(() => {
+    toast("Code copied to clipboard!", "success");
+  }).catch(() => {
+    toast("Failed to copy code", "error");
+  });
+};
 window.switchModalTab = function (tab, el) {
   document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
@@ -461,8 +634,10 @@ window.saveEvent = async function () {
 window.openTaskModal = function (col) {
   const defaultCol = col || 'todo'; editingTaskId = null;
   document.getElementById('taskModalTitle').textContent = 'Add Task';
-  ['tskTitle', 'tskStartTime', 'tskEndTime'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('tskTitle').value = '';
   document.getElementById('tskDeadline').value = '';
+  document.getElementById('tskDeadlineDisplay').value = '';
+  document.getElementById('tskType').value = 'learning';
   document.getElementById('tskPriority').value = 'medium';
   document.getElementById('tskColumn').value = defaultCol;
   document.getElementById('tskSaveTxt').textContent = 'Add Task';
@@ -487,34 +662,80 @@ function populateDiscussionTaskDropdown(tasksList) {
   });
 }
 
+window.updateTaskTypeFields = function () {
+  const taskType = document.getElementById('tskType').value;
+  const fileGroup = document.getElementById('taskTypeFileGroup');
+  const fileLabel = document.getElementById('taskTypeFileLabel');
+  const fileHint = document.getElementById('taskTypeFileHint');
+
+  if (taskType === 'learning') {
+    fileLabel.textContent = 'Upload Quiz Result Screenshot';
+    fileHint.textContent = 'For Learning: Screenshot of quiz results (PNG, JPG, GIF)';
+    document.getElementById('tskTypeFiles').accept = '.jpg,.jpeg,.png,.gif';
+  } else if (taskType === 'creation') {
+    fileLabel.textContent = 'Upload Work Files';
+    fileHint.textContent = 'For Creation: Doc, PPT, PDF, Report, etc.';
+    document.getElementById('tskTypeFiles').accept = '.doc,.docx,.ppt,.pptx,.pdf,.jpg,.png';
+  }
+  fileGroup.style.display = 'block';
+};
+
 window.saveTask = async function () {
   const title = document.getElementById('tskTitle').value.trim();
   const deadline = document.getElementById('tskDeadline').value;
-  const startTime = document.getElementById('tskStartTime')?.value || '';
-  const endTime = document.getElementById('tskEndTime')?.value || '';
   const priority = document.getElementById('tskPriority').value;
   const assignedTo = document.getElementById('tskAssign').value;
   const column = document.getElementById('tskColumn').value;
+  const taskType = document.getElementById('tskType').value;
+
   if (!title) return toast("Task title required", "error");
+  if (!deadline) return toast("Deadline date required", "error");
   if (!userDoc.groupId) return toast("Join a group first", "error");
+
   const assignedName = groupMembers.find(m => m.uid === assignedTo)?.name || '';
   const points = priority === 'high' ? 25 : priority === 'medium' ? 15 : 10;
-  const data = { title, deadline, startTime, endTime, priority, column, assignedTo, assignedName, points, createdBy: currentUser.uid, createdAt: serverTimestamp() };
+
+  const data = {
+    title, deadline, priority, column, assignedTo, assignedName, points,
+    type: taskType,
+    createdBy: currentUser.uid,
+    createdAt: serverTimestamp(),
+    uploadedFiles: [],
+    approvals: [],
+    rejections: [],
+    submittedBy: currentUser.uid
+  };
+
   try {
-    if (editingTaskId) { await updateDoc(doc(db, "groups", userDoc.groupId, "tasks", editingTaskId), data); toast("Task updated!", "success"); }
-    else {
+    if (editingTaskId) {
+      await updateDoc(doc(db, "groups", userDoc.groupId, "tasks", editingTaskId), data);
+      toast("Task updated!", "success");
+    } else {
       await addDoc(collection(db, "groups", userDoc.groupId, "tasks"), data);
       await awardPoints(POINTS.TASK_ADD);
       await logActivity(`✅ ${userDoc.name} added task: ${title}`, 'task');
       toast(`Task added! +${POINTS.TASK_ADD} pts`, "success");
     }
     closeModal('taskModal');
-  } catch (e) { toast("Error saving task", "error"); }
+  } catch (e) {
+    console.error(e);
+    toast("Error saving task", "error");
+  }
 };
 
 function renderKanban() {
-  ['todo', 'inprogress', 'completed'].forEach(col => {
-    const colTasks = tasks.filter(t => t.column === col);
+  ['todo', 'inprogress', 'completed', 'pending_peer_approval'].forEach(col => {
+    let colTasks = tasks.filter(t => t.column === col);
+
+    // Apply filter for pending approval column
+    if (col === 'pending_peer_approval') {
+      if (pendingApprovalFilter === 'mine') {
+        colTasks = colTasks.filter(t => t.assignedTo === currentUser.uid);
+      } else if (pendingApprovalFilter === 'others') {
+        colTasks = colTasks.filter(t => t.assignedTo !== currentUser.uid);
+      }
+    }
+
     document.getElementById('count-' + col).textContent = colTasks.length;
     document.getElementById('cards-' + col).innerHTML = colTasks.map(renderTaskCard).join('');
   });
@@ -523,10 +744,102 @@ function renderKanban() {
 
 function renderTaskCard(t) {
   const now = new Date(), deadline = t.deadline ? new Date(t.deadline) : null;
-  const isOverdue = deadline && deadline < now && t.column !== 'completed';
+  const isOverdue = deadline && deadline < now && t.column !== 'completed' && t.column !== 'pending_peer_approval';
   const isCompleted = t.column === 'completed';
+  const isPendingApproval = t.column === 'pending_peer_approval';
+  const approvalCount = (t.approvals || []).length;
+  const rejectionCount = (t.rejections || []).length;
+  const isApproved = approvalCount >= window.getRequiredApprovals();
   const deadlineStr = deadline ? deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-  return `<div class="task-card ${isCompleted ? 'task-completed' : ''}" draggable="true" data-id="${t.id}">
+
+  let verifyButton = '';
+  let submitButton = '';
+  const isAssignedToUser = !t.assignedTo || t.assignedTo === currentUser.uid;
+
+  if (t.column === 'inprogress' && isAssignedToUser) {
+    submitButton = `<button class="task-act-btn submit" onclick="window.openTaskSubmissionModal('${t.id}', '${escapeHtml(t.title)}')" title="Submit as Completed"><i class="fa-solid fa-paper-plane"></i></button>`;
+  }
+  if ((t.column === 'inprogress' || t.column === 'todo') && isAssignedToUser) {
+    verifyButton = `<button class="task-act-btn verify" onclick="window.openTaskVerificationModal('${t.id}', '${escapeHtml(t.title)}', '${escapeHtml(t.description || '')}')" title="Verify with Quiz"><i class="fa-solid fa-quiz"></i></button>`;
+  }
+
+  let statusBadge = '';
+  if (isPendingApproval) {
+    if (isApproved) {
+      statusBadge = `<div class="verification-badge completed"><i class="fa-solid fa-check-circle"></i> Completed</div>`;
+    } else if (rejectionCount > 0) {
+      statusBadge = `<div class="verification-badge failed"><i class="fa-solid fa-x-circle"></i> Rejected</div>`;
+    } else {
+      statusBadge = `<div class="verification-badge pending"><i class="fa-solid fa-hourglass-half"></i> Pending Approval (${approvalCount}/${window.getRequiredApprovals()})</div>`;
+    }
+  } else if (isCompleted) {
+    statusBadge = `<div class="verification-badge completed"><i class="fa-solid fa-check-circle"></i> Completed</div>`;
+  } else if (t.verificationScore) {
+    const passed = t.verificationScore >= 70;
+    statusBadge = `<div class="verification-badge ${passed ? 'passed' : 'failed'}"><i class="fa-solid fa-${passed ? 'check' : 'x'}"></i> ${t.verificationScore}%</div>`;
+  }
+
+  let typeIcon = '';
+  if (t.type === 'learning') {
+    typeIcon = `<span class="task-type-badge learning" title="Learning Task">📚</span>`;
+  } else if (t.type === 'creation') {
+    typeIcon = `<span class="task-type-badge creation" title="Creation Task">✏️</span>`;
+  }
+
+  let approvalButtons = '';
+  if (isPendingApproval && t.assignedTo !== currentUser.uid) {
+    const hasApproved = (t.approvals || []).includes(currentUser.uid);
+    const hasRejected = (t.rejections || []).includes(currentUser.uid);
+    approvalButtons = `
+      <div class="task-approval-buttons" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+        <button class="task-act-btn" onclick="window.openSubmittedFilesModal('${t.id}', '${escapeHtml(t.title)}')" title="View Submitted Files" style="width: 100%; padding: 10px; background: var(--surface3); border: 1px solid var(--border); color: var(--text); cursor: pointer; border-radius: 6px; font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <i class="fa-solid fa-file"></i> View Files
+        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="task-act-btn" onclick="window.approveTask('${t.id}')" title="Approve" style="flex: 1; padding: 10px; background: ${hasApproved ? 'rgba(78, 205, 196, 0.2)' : 'var(--surface3)'}; border: 1px solid ${hasApproved ? '#4ecdc4' : 'var(--border)'}; color: ${hasApproved ? '#4ecdc4' : 'var(--text)'}; cursor: pointer; border-radius: 6px; font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <i class="fa-solid fa-thumbs-up"></i> Approve
+          </button>
+          <button class="task-act-btn" onclick="window.rejectTask('${t.id}')" title="Reject" style="flex: 1; padding: 10px; background: ${hasRejected ? 'rgba(255, 107, 53, 0.2)' : 'var(--surface3)'}; border: 1px solid ${hasRejected ? '#ff6b35' : 'var(--border)'}; color: ${hasRejected ? '#ff6b35' : 'var(--text)'}; cursor: pointer; border-radius: 6px; font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <i class="fa-solid fa-thumbs-down"></i> Reject
+          </button>
+        </div>
+      </div>
+    `;
+  } else if (isPendingApproval && t.assignedTo === currentUser.uid) {
+    // Show approval status for user's own submitted task
+    const approvalCount = (t.approvals || []).length;
+    const rejectionCount = (t.rejections || []).length;
+    const requiredApprovals = window.getRequiredApprovals();
+
+    let statusText = '';
+    let statusColor = '';
+    let statusIcon = '';
+
+    if (rejectionCount > 0) {
+      statusText = `Rejected by ${rejectionCount} member${rejectionCount > 1 ? 's' : ''}`;
+      statusColor = '#ff6b35';
+      statusIcon = 'fa-x-circle';
+    } else if (approvalCount >= requiredApprovals) {
+      statusText = `Approved! (${approvalCount}/${requiredApprovals})`;
+      statusColor = '#4ecdc4';
+      statusIcon = 'fa-check-circle';
+    } else {
+      statusText = `Waiting for approval (${approvalCount}/${requiredApprovals})`;
+      statusColor = '#a78bfa';
+      statusIcon = 'fa-hourglass-half';
+    }
+
+    approvalButtons = `
+      <div class="task-approval-status" style="margin-top: 12px; padding: 12px; background: var(--surface2); border-radius: 6px; border-left: 4px solid ${statusColor};">
+        <div style="display: flex; align-items: center; gap: 8px; color: ${statusColor}; font-size: 13px; font-weight: 500;">
+          <i class="fa-solid ${statusIcon}"></i>
+          <span>${statusText}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `<div class="task-card ${isCompleted ? 'task-completed' : ''}" draggable="${(!t.assignedTo || t.assignedTo === '' || t.assignedTo === currentUser.uid || t.createdBy === currentUser.uid) ? 'true' : 'false'}" data-id="${t.id}">
     <div class="task-card-header">
       <label class="task-toggle-wrap" title="${isCompleted ? 'Mark incomplete' : 'Mark complete'}">
         <input type="checkbox" class="task-toggle" ${isCompleted ? 'checked' : ''} onchange="toggleTaskComplete('${t.id}', this.checked)">
@@ -537,14 +850,18 @@ function renderTaskCard(t) {
     <div class="task-card-title ${isCompleted ? 'line-through' : ''}">${t.title}</div>
     <div class="task-card-meta">
       <span class="priority-badge ${t.priority}">${t.priority}</span>
+      ${typeIcon}
       ${t.assignedName ? `<span class="task-assignee"><div class="task-assignee-av">${t.assignedName.charAt(0)}</div>${t.assignedName.split(' ')[0]}</span>` : ''}
       ${deadline ? `<span class="task-deadline ${isOverdue ? 'overdue' : ''}"><i class="fa-regular fa-clock"></i> ${deadlineStr}</span>` : ''}
-      ${t.startTime ? `<span class="task-time-badge"><i class="fa-regular fa-clock"></i> ${t.startTime}${t.endTime ? '–' + t.endTime : ''}</span>` : ''}
     </div>
+    ${statusBadge}
     <div class="task-card-actions">
+      ${submitButton}
+      ${verifyButton}
       <button class="task-act-btn" onclick="editTask('${t.id}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
       <button class="task-act-btn danger" onclick="deleteTask('${t.id}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
     </div>
+    ${approvalButtons}
   </div>`;
 }
 
@@ -576,6 +893,17 @@ window.toggleTaskComplete = async function (id, checked) {
 
 window.editTask = function (id) {
   const task = tasks.find(t => t.id === id); if (!task) return;
+
+  console.log('editTask called for task:', task);
+
+  // Check if user can edit this task
+  if (!window.canEditTask(task)) {
+    console.log('User cannot edit this task - showing alert');
+    window.showAlert('Cannot Edit', 'This task is not assigned to you');
+    return;
+  }
+
+  console.log('User can edit this task - opening modal');
   editingTaskId = id;
   document.getElementById('taskModalTitle').textContent = 'Edit Task';
   document.getElementById('tskTitle').value = task.title;
@@ -590,8 +918,21 @@ window.editTask = function (id) {
 };
 
 window.deleteTask = async function (id) {
+  const task = tasks.find(t => t.id === id); if (!task) return;
+
+  // Check if user can delete this task
+  if (!window.canEditTask(task)) {
+    window.showAlert('Cannot Delete', 'This task is not assigned to you');
+    return;
+  }
+
   if (!confirm('Delete this task?')) return;
-  try { await deleteDoc(doc(db, "groups", userDoc.groupId, "tasks", id)); toast("Task deleted", "info"); } catch (e) { toast("Error", "error"); }
+  try {
+    await deleteDoc(doc(db, "groups", userDoc.groupId, "tasks", id));
+    toast("Task deleted", "info");
+  } catch (e) {
+    toast("Error", "error");
+  }
 };
 
 window.filterTasks = function (f, btn) {
@@ -610,8 +951,43 @@ window.filterTasks = function (f, btn) {
 
 function setupDragDrop() {
   document.querySelectorAll('.task-card').forEach(card => {
-    card.addEventListener('dragstart', e => { e.dataTransfer.setData('taskId', card.dataset.id); card.classList.add('dragging'); });
-    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    card.addEventListener('dragstart', e => {
+      // Check if card is actually draggable
+      if (card.draggable === false || card.getAttribute('draggable') === 'false') {
+        e.preventDefault();
+        e.dataTransfer.effectAllowed = 'none';
+        setTimeout(() => {
+          window.showAlert('Cannot Move Task', 'This is not your assigned task. You cannot take action on them');
+        }, 50);
+        return false;
+      }
+
+      const taskId = card.dataset.id;
+      const task = tasks.find(t => t.id === taskId);
+
+      // Double-check permission
+      const isUnassigned = !task?.assignedTo || task?.assignedTo === '';
+      const isAssignedToMe = task?.assignedTo === currentUser?.uid;
+      const isCreatedByMe = task?.createdBy === currentUser?.uid;
+      const canDrag = isUnassigned || isAssignedToMe || isCreatedByMe;
+
+      if (!canDrag) {
+        e.preventDefault();
+        e.dataTransfer.effectAllowed = 'none';
+        setTimeout(() => {
+          window.showAlert('Cannot Move Task', 'This is not your assigned task. You cannot take action on them');
+        }, 50);
+        return false;
+      }
+
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('taskId', taskId);
+      card.classList.add('dragging');
+    });
+
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+    });
   });
 }
 
@@ -621,14 +997,28 @@ window.dropTask = async function (e, col) {
   const id = e.dataTransfer.getData('taskId'); if (!id) return;
   try {
     const task = tasks.find(t => t.id === id);
-    await updateDoc(doc(db, "groups", userDoc.groupId, "tasks", id), { column: col, updatedAt: serverTimestamp() });
-    if (col === 'completed' && task?.column !== 'completed') {
-      const pts = task?.points || POINTS.TASK_COMPLETE;
-      await awardPoints(pts, true);
-      await logActivity(`🏆 ${userDoc.name} completed: ${task?.title}`, 'complete');
-      toast(`+${pts} pts 🎉`, "success");
+
+    // Check if user can move this task
+    if (!window.canEditTask(task)) {
+      window.showAlert('Cannot Move Task', 'This task is not assigned to you');
+      return;
     }
-  } catch (e) { toast("Error moving task", "error"); }
+
+    // When task is moved to completed, ask for proof first
+    if (col === 'completed' && task?.column !== 'completed') {
+      // Open proof submission modal based on task type
+      window.openProofSubmissionModal(id, task.title, task.type);
+      return;
+    }
+
+    // For other columns, just move the task
+    const targetCol = col;
+    await updateDoc(doc(db, "groups", userDoc.groupId, "tasks", id), { column: targetCol, updatedAt: serverTimestamp() });
+
+  } catch (e) {
+    console.error(e);
+    toast("Error moving task", "error");
+  }
 };
 
 // ===== Task Summary =====
@@ -1086,3 +1476,695 @@ window.addEventListener('tasksUpdated', () => {
 setTimeout(() => {
   renderDashboardPredictions();
 }, 1000);
+
+window.openSubmittedFilesModal = async function (taskId, taskTitle) {
+  try {
+    const taskRef = doc(db, "groups", userDoc.groupId, "tasks", taskId);
+    const taskSnap = await getDoc(taskRef);
+    const task = taskSnap.data();
+
+    if (!task) return toast("Task not found", "error");
+
+    // Get submitter name
+    const submitterRef = doc(db, "users", task.submittedBy);
+    const submitterSnap = await getDoc(submitterRef);
+    const submitterName = submitterSnap.data()?.name || "Unknown";
+
+    // Build modal content
+    let html = '<div class="submitted-files-container">';
+    html += '<div class="submitted-files-header">';
+    html += '<h3>' + escapeHtml(taskTitle) + '</h3>';
+    html += '<p style="color: var(--text-muted); font-size: 12px;">Submitted by: <strong>' + escapeHtml(submitterName) + '</strong></p>';
+    html += '</div>';
+
+    // Display files based on task type
+    if (task.type === 'learning') {
+      html += '<div class="submitted-files-section">';
+      html += '<h4>📚 Quiz Result Screenshot</h4>';
+      if (task.uploadedFiles && task.uploadedFiles.length > 0) {
+        const file = task.uploadedFiles[0];
+        const fileName = typeof file === 'string' ? file : file.name;
+        const fileData = typeof file === 'string' ? null : file.data;
+
+        html += '<div class="submitted-file-item" style="cursor: pointer; padding: 12px; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border); margin-bottom: 12px;">';
+        html += '<i class="fa-solid fa-image" style="font-size: 24px; color: var(--accent); margin-right: 12px;"></i>';
+        html += '<span style="font-size: 13px; color: var(--text);">' + escapeHtml(fileName) + '</span>';
+        if (fileData) {
+          html += '<button class="btn-primary" onclick="window.previewSubmittedFile(\'' + escapeHtml(fileName) + '\', \'' + fileData.replace(/'/g, "\\'") + '\')" style="margin-left: 12px; padding: 6px 12px; font-size: 12px;">View</button>';
+        }
+        html += '</div>';
+      } else {
+        html += '<p style="color: var(--text-muted);">No files submitted</p>';
+      }
+      html += '</div>';
+    } else if (task.type === 'creation') {
+      html += '<div class="submitted-files-section">';
+      html += '<h4>✏️ Work Files</h4>';
+      if (task.uploadedFiles && task.uploadedFiles.length > 0) {
+        html += '<div class="submitted-files-list">';
+        task.uploadedFiles.forEach((file, index) => {
+          const fileName = typeof file === 'string' ? file : file.name;
+          const fileData = typeof file === 'string' ? null : file.data;
+          const icon = getFileIcon(fileName);
+
+          html += '<div class="submitted-file-item" style="padding: 12px; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">';
+          html += '<div style="display: flex; align-items: center; gap: 12px; flex: 1;">';
+          html += '<i class="fa-solid ' + icon + '" style="font-size: 18px; color: var(--accent);"></i>';
+          html += '<span style="font-size: 13px; color: var(--text);">' + escapeHtml(fileName) + '</span>';
+          html += '</div>';
+          if (fileData) {
+            html += '<button class="btn-primary" onclick="window.previewSubmittedFile(\'' + escapeHtml(fileName) + '\', \'' + fileData.replace(/'/g, "\\'") + '\')" style="padding: 6px 12px; font-size: 12px;">View</button>';
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+      } else {
+        html += '<p style="color: var(--text-muted);">No files submitted</p>';
+      }
+      html += '</div>';
+    }
+
+    html += '<div class="submitted-files-actions" style="margin-top: 16px; display: flex; gap: 8px;">';
+    html += '<button class="btn-primary" onclick="window.closeSubmittedFilesModal()" style="flex: 1;">Close</button>';
+    html += '</div>';
+    html += '</div>';
+
+    const filesModal = document.getElementById('submittedFilesModal');
+    if (filesModal) {
+      filesModal.querySelector('.modal-body').innerHTML = html;
+      openModal('submittedFilesModal');
+    }
+  } catch (e) {
+    console.error(e);
+    toast("Error loading submitted files", "error");
+  }
+};
+
+window.previewSubmittedFile = function (fileName, fileData) {
+  // Open file preview in a new modal similar to resources
+  const previewModal = document.getElementById('filePreviewModal');
+  if (!previewModal) {
+    console.error('File preview modal not found');
+    return;
+  }
+
+  const ext = fileName.split('.').pop().toLowerCase();
+  let previewHtml = '<div class="file-preview-container">';
+
+  // Header
+  previewHtml += '<div class="file-preview-header">';
+  previewHtml += '<h3>' + escapeHtml(fileName) + '</h3>';
+  previewHtml += '<button onclick="window.closeFilePreview()" style="background: none; border: none; color: var(--text); font-size: 24px; cursor: pointer; padding: 0;"><i class="fa-solid fa-xmark"></i></button>';
+  previewHtml += '</div>';
+
+  // Content
+  previewHtml += '<div class="file-preview-content">';
+
+  // Check if it's an image
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+    previewHtml += '<img src="' + fileData + '" alt="' + escapeHtml(fileName) + '" style="max-width: 100%; max-height: 100%; border-radius: 8px; object-fit: contain;">';
+  } else {
+    // For non-image files, show file info
+    previewHtml += '<div style="text-align: center;">';
+    previewHtml += '<i class="fa-solid fa-file" style="font-size: 64px; color: var(--accent); margin-bottom: 16px; display: block;"></i>';
+    previewHtml += '<p style="color: var(--text-muted); margin-bottom: 16px; font-size: 14px;">This file type cannot be previewed in the browser.</p>';
+    previewHtml += '<button class="btn-primary" onclick="window.downloadSubmittedFile(\'' + escapeHtml(fileName) + '\', \'' + fileData.replace(/'/g, "\\'") + '\')" style="padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;"><i class="fa-solid fa-download"></i> Download File</button>';
+    previewHtml += '</div>';
+  }
+
+  previewHtml += '</div>';
+
+  // Actions
+  previewHtml += '<div class="file-preview-actions">';
+  previewHtml += '<button class="btn-primary" onclick="window.downloadSubmittedFile(\'' + escapeHtml(fileName) + '\', \'' + fileData.replace(/'/g, "\\'") + '\')" style="background: var(--accent); color: white; border: 1px solid var(--accent);"><i class="fa-solid fa-download"></i> Download</button>';
+  previewHtml += '<button class="btn-secondary" onclick="window.closeFilePreview()" style="background: var(--surface2); color: var(--text); border: 1px solid var(--border);">Close</button>';
+  previewHtml += '</div>';
+
+  previewHtml += '</div>';
+
+  previewModal.querySelector('.modal-body').innerHTML = previewHtml;
+  openModal('filePreviewModal');
+};
+
+window.downloadSubmittedFile = function (fileName, fileData) {
+  const link = document.createElement('a');
+  link.href = fileData;
+  link.download = fileName;
+  link.click();
+};
+
+window.closeFilePreview = function () {
+  closeModal('filePreviewModal');
+};
+
+window.openFilePreview = function (fileName, fileData) {
+  // Open file in new tab or download
+  const link = document.createElement('a');
+  link.href = fileData;
+  link.download = fileName;
+  link.click();
+};
+
+window.closeSubmittedFilesModal = function () {
+  closeModal('submittedFilesModal');
+};
+
+window.approveTask = async function (taskId) {
+  if (!userDoc.groupId) return toast("Join a group first", "error");
+  try {
+    const taskRef = doc(db, "groups", userDoc.groupId, "tasks", taskId);
+    const taskSnap = await getDoc(taskRef);
+    const task = taskSnap.data();
+
+    if (!task) return toast("Task not found", "error");
+    if (task.assignedTo === currentUser.uid) return toast("You cannot approve your own task", "error");
+
+    const approvals = task.approvals || [];
+    const rejections = task.rejections || [];
+
+    // Remove from rejections if previously rejected
+    const updatedRejections = rejections.filter(uid => uid !== currentUser.uid);
+
+    // Add to approvals if not already approved
+    let updatedApprovals = approvals;
+    if (!approvals.includes(currentUser.uid)) {
+      updatedApprovals = [...approvals, currentUser.uid];
+    }
+
+    // Check if task should be marked as completed (required approvals met)
+    const newColumn = updatedApprovals.length >= window.getRequiredApprovals() ? 'completed' : 'pending_peer_approval';
+
+    await updateDoc(taskRef, {
+      approvals: updatedApprovals,
+      rejections: updatedRejections,
+      column: newColumn,
+      updatedAt: serverTimestamp()
+    });
+
+    if (newColumn === 'completed') {
+      const pts = task.points || POINTS.TASK_COMPLETE || 15;
+      await awardPoints(pts, true);
+      await logActivity(`✅ ${userDoc.name} approved task: ${task.title}`, 'approval');
+      toast(`Task approved! +${pts} pts 🎉`, "success");
+    } else {
+      await logActivity(`👍 ${userDoc.name} approved task: ${task.title}`, 'approval');
+      toast("Task approved!", "success");
+    }
+
+    renderKanban();
+  } catch (e) {
+    console.error(e);
+    toast("Error approving task", "error");
+  }
+};
+
+window.rejectTask = async function (taskId) {
+  if (!userDoc.groupId) return toast("Join a group first", "error");
+  try {
+    const taskRef = doc(db, "groups", userDoc.groupId, "tasks", taskId);
+    const taskSnap = await getDoc(taskRef);
+    const task = taskSnap.data();
+
+    if (!task) return toast("Task not found", "error");
+    if (task.assignedTo === currentUser.uid) return toast("You cannot reject your own task", "error");
+
+    const rejections = task.rejections || [];
+
+    // Add to rejections if not already rejected
+    let updatedRejections = rejections;
+    if (!rejections.includes(currentUser.uid)) {
+      updatedRejections = [...rejections, currentUser.uid];
+    }
+
+    // Move rejected task back to todo column
+    const newColumn = 'todo';
+
+    await updateDoc(taskRef, {
+      rejections: updatedRejections,
+      column: newColumn,
+      approvals: [], // Clear approvals when rejected
+      updatedAt: serverTimestamp()
+    });
+
+    await logActivity(`👎 ${userDoc.name} rejected task: ${task.title}`, 'rejection');
+    toast("Task rejected and moved back to To Do", "success");
+    renderKanban();
+  } catch (e) {
+    console.error(e);
+    toast("Error rejecting task", "error");
+  }
+};
+
+window.updateSubmitTaskTypeFields = function () {
+  const taskType = document.getElementById('submitTaskType').value;
+  const fileGroup = document.getElementById('submitTaskTypeFileGroup');
+  const fileLabel = document.getElementById('submitTaskTypeFileLabel');
+  const fileHint = document.getElementById('submitTaskTypeFileHint');
+
+  if (taskType === 'learning') {
+    fileLabel.textContent = 'Upload Quiz Result Screenshot';
+    fileHint.textContent = 'For Learning: Screenshot of quiz results (PNG, JPG, GIF)';
+    document.getElementById('submitTaskTypeFiles').accept = '.jpg,.jpeg,.png,.gif';
+  } else if (taskType === 'creation') {
+    fileLabel.textContent = 'Upload Work Files';
+    fileHint.textContent = 'For Creation: Doc, PPT, PDF, Report, etc.';
+    document.getElementById('submitTaskTypeFiles').accept = '.doc,.docx,.ppt,.pptx,.pdf,.jpg,.png';
+  }
+};
+
+window.openTaskSubmissionModal = function (taskId, taskTitle) {
+  window.currentSubmitTaskId = taskId;
+  document.getElementById('submitTaskType').value = 'learning';
+  document.getElementById('submitTaskTypeFiles').value = '';
+  window.updateSubmitTaskTypeFields();
+  openModal('taskSubmissionModal');
+};
+
+window.closeTaskSubmissionModal = function () {
+  closeModal('taskSubmissionModal');
+  window.currentSubmitTaskId = null;
+};
+
+window.submitTaskAsCompleted = async function () {
+  if (!window.currentSubmitTaskId) return toast("Task not found", "error");
+  if (!userDoc.groupId) return toast("Join a group first", "error");
+
+  const taskType = document.getElementById('submitTaskType').value;
+  const files = document.getElementById('submitTaskTypeFiles').files;
+
+  if (files.length === 0) return toast("Please upload at least one file", "error");
+
+  try {
+    const taskRef = doc(db, "groups", userDoc.groupId, "tasks", window.currentSubmitTaskId);
+
+    await updateDoc(taskRef, {
+      column: 'pending_peer_approval',
+      type: taskType,
+      uploadedFiles: Array.from(files).map(f => f.name),
+      updatedAt: serverTimestamp()
+    });
+
+    await logActivity(`📋 ${userDoc.name} submitted task for approval`, 'pending');
+    toast("Task submitted for peer approval!", "success");
+    closeModal('taskSubmissionModal');
+    renderKanban();
+  } catch (e) {
+    console.error(e);
+    toast("Error submitting task", "error");
+  }
+};
+
+// Helper function to calculate required approvals
+window.getRequiredApprovals = function () {
+  // Required approvals = total members - 1 (the submitter)
+  const totalMembers = groupMembers.length;
+  return Math.max(1, totalMembers - 1);
+};
+window.deadlineCalendarState = {
+  currentDate: new Date(),
+  selectedDate: null
+};
+
+window.openDeadlineCalendar = function () {
+  window.deadlineCalendarState.currentDate = new Date();
+  window.renderDeadlineCalendar();
+  openModal('deadlineCalendarModal');
+};
+
+window.closeDeadlineCalendar = function () {
+  closeModal('deadlineCalendarModal');
+};
+
+window.renderDeadlineCalendar = function () {
+  const state = window.deadlineCalendarState;
+  const year = state.currentDate.getFullYear();
+  const month = state.currentDate.getMonth();
+
+  // Update title
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  document.getElementById('deadlineCalendarTitle').textContent = `${monthNames[month]} ${year}`;
+
+  // Get first day of month and number of days
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Generate calendar days
+  let html = '';
+
+  // Empty cells for days before month starts
+  for (let i = 0; i < firstDay; i++) {
+    html += '<div class="deadline-day empty"></div>';
+  }
+
+  // Days of month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month, day);
+    date.setHours(0, 0, 0, 0);
+    const isPast = date < today;
+    const isToday = date.getTime() === today.getTime();
+    const isSelected = window.deadlineCalendarState.selectedDate &&
+      date.getTime() === new Date(window.deadlineCalendarState.selectedDate).getTime();
+
+    const classes = ['deadline-day'];
+    if (isPast) classes.push('past');
+    if (isToday) classes.push('today');
+    if (isSelected) classes.push('selected');
+
+    if (isPast) {
+      html += `<div class="${classes.join(' ')}" style="cursor: not-allowed; opacity: 0.5;">${day}</div>`;
+    } else {
+      html += `<div class="${classes.join(' ')}" data-day="${day}" style="cursor: pointer;">${day}</div>`;
+    }
+  }
+
+  const daysContainer = document.getElementById('deadlineCalendarDays');
+  daysContainer.innerHTML = html;
+
+  // Add event listeners to all clickable days
+  daysContainer.querySelectorAll('[data-day]').forEach(dayEl => {
+    dayEl.addEventListener('click', function () {
+      const day = parseInt(this.getAttribute('data-day'));
+      window.selectDeadlineDate(day);
+    });
+  });
+};
+
+window.selectDeadlineDate = function (day) {
+  const state = window.deadlineCalendarState;
+  const year = state.currentDate.getFullYear();
+  const month = state.currentDate.getMonth();
+  const date = new Date(year, month, day);
+  date.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Don't allow past dates
+  if (date < today) {
+    toast("Cannot select past dates", "error");
+    return;
+  }
+
+  state.selectedDate = date;
+
+  // Format date as YYYY-MM-DD
+  const dateStr = date.toISOString().split('T')[0];
+  document.getElementById('tskDeadline').value = dateStr;
+
+  // Format display date
+  const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+  const displayStr = date.toLocaleDateString('en-US', options);
+  document.getElementById('tskDeadlineDisplay').value = displayStr;
+
+  // Close the calendar modal
+  window.closeDeadlineCalendar();
+  toast("Date selected!", "success");
+};
+
+window.prevDeadlineMonth = function () {
+  window.deadlineCalendarState.currentDate.setMonth(window.deadlineCalendarState.currentDate.getMonth() - 1);
+  window.renderDeadlineCalendar();
+};
+
+window.nextDeadlineMonth = function () {
+  window.deadlineCalendarState.currentDate.setMonth(window.deadlineCalendarState.currentDate.getMonth() + 1);
+  window.renderDeadlineCalendar();
+};
+
+
+// Proof Submission Functions (for drag to complete)
+window.currentProofTaskId = null;
+window.currentProofTaskType = null;
+window.proofFiles = {
+  learning: null,
+  creation: []
+};
+
+window.openProofSubmissionModal = function (taskId, taskTitle, taskType) {
+  window.currentProofTaskId = taskId;
+  window.currentProofTaskType = taskType || 'learning';
+  window.proofFiles = { learning: null, creation: [] };
+
+  document.getElementById('proofTaskTitle').textContent = taskTitle;
+
+  // Show/hide sections based on task type
+  if (taskType === 'learning') {
+    document.getElementById('learningProofSection').style.display = 'block';
+    document.getElementById('creationProofSection').style.display = 'none';
+    document.getElementById('proofTaskType').textContent = '📚 Learning Task - Upload quiz result screenshot';
+    document.getElementById('learningProofInput').value = '';
+    document.getElementById('learningProofPreview').innerHTML = '';
+  } else if (taskType === 'creation') {
+    document.getElementById('learningProofSection').style.display = 'none';
+    document.getElementById('creationProofSection').style.display = 'block';
+    document.getElementById('proofTaskType').textContent = '✏️ Creation Task - Upload work files';
+    document.getElementById('creationProofInput').value = '';
+    document.getElementById('creationProofPreview').innerHTML = '';
+  }
+
+  document.getElementById('proofUploadStatus').innerHTML = '';
+  openModal('proofSubmissionModal');
+
+  // Setup drag and drop after modal is opened
+  setTimeout(() => {
+    window.setupProofUploadDragDrop();
+  }, 100);
+};
+
+window.closeProofSubmissionModal = function () {
+  closeModal('proofSubmissionModal');
+  window.currentProofTaskId = null;
+  window.currentProofTaskType = null;
+  window.proofFiles = { learning: null, creation: [] };
+};
+
+window.handleProofImageUpload = function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (file.size > 5 * 1024 * 1024) {
+    toast("Image must be less than 5MB", "error");
+    return;
+  }
+
+  window.proofFiles.learning = file;
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const preview = document.getElementById('learningProofPreview');
+    preview.innerHTML = `
+      <div class="proof-image-item">
+        <img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px;">
+        <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">${file.name}</p>
+      </div>
+    `;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.handleCreationFilesUpload = function (event) {
+  const files = Array.from(event.target.files);
+  if (files.length === 0) return;
+
+  // Validate file sizes
+  for (let file of files) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast(`${file.name} is larger than 10MB`, "error");
+      return;
+    }
+  }
+
+  window.proofFiles.creation = files;
+
+  const preview = document.getElementById('creationProofPreview');
+  let html = '<div class="proof-files-list">';
+
+  files.forEach((file, index) => {
+    const icon = getFileIcon(file.name);
+    html += `
+      <div class="proof-file-item">
+        <i class="fa-solid ${icon}"></i>
+        <span>${file.name}</span>
+        <small>${formatFileSize(file.size)}</small>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  preview.innerHTML = html;
+};
+
+// Setup drag and drop for proof upload areas
+window.setupProofUploadDragDrop = function () {
+  const learningArea = document.querySelector('#learningProofSection .proof-upload-area');
+  const creationArea = document.querySelector('#creationProofSection .proof-upload-area');
+
+  const setupDragDropForArea = (area, inputId) => {
+    if (!area) return;
+
+    area.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      area.style.borderColor = 'var(--accent)';
+      area.style.background = 'var(--surface3)';
+    });
+
+    area.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      area.style.borderColor = 'var(--border)';
+      area.style.background = 'var(--surface2)';
+    });
+
+    area.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      area.style.borderColor = 'var(--border)';
+      area.style.background = 'var(--surface2)';
+
+      const files = e.dataTransfer.files;
+      const input = document.getElementById(inputId);
+      if (input) {
+        input.files = files;
+        // Trigger change event
+        const event = new Event('change', { bubbles: true });
+        input.dispatchEvent(event);
+      }
+    });
+  };
+
+  setupDragDropForArea(learningArea, 'learningProofInput');
+  setupDragDropForArea(creationArea, 'creationProofInput');
+};
+
+function getFileIcon(filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const icons = {
+    'pdf': 'fa-file-pdf',
+    'doc': 'fa-file-word',
+    'docx': 'fa-file-word',
+    'ppt': 'fa-file-powerpoint',
+    'pptx': 'fa-file-powerpoint',
+    'xls': 'fa-file-excel',
+    'xlsx': 'fa-file-excel',
+    'jpg': 'fa-file-image',
+    'jpeg': 'fa-file-image',
+    'png': 'fa-file-image',
+    'gif': 'fa-file-image'
+  };
+  return icons[ext] || 'fa-file';
+}
+
+window.submitProofAndComplete = async function () {
+  if (!window.currentProofTaskId) return toast("Task not found", "error");
+  if (!userDoc.groupId) return toast("Join a group first", "error");
+
+  const taskType = window.currentProofTaskType;
+
+  // Validate proof based on task type
+  if (taskType === 'learning') {
+    if (!window.proofFiles.learning) {
+      return toast("Please upload a quiz result screenshot", "error");
+    }
+  } else if (taskType === 'creation') {
+    if (window.proofFiles.creation.length === 0) {
+      return toast("Please upload at least one work file", "error");
+    }
+  }
+
+  try {
+    const taskRef = doc(db, "groups", userDoc.groupId, "tasks", window.currentProofTaskId);
+
+    // Prepare files with data for storage
+    let uploadedFiles = [];
+
+    if (taskType === 'learning') {
+      const file = window.proofFiles.learning;
+      const reader = new FileReader();
+      await new Promise((resolve, reject) => {
+        reader.onload = () => {
+          uploadedFiles.push({
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            data: reader.result
+          });
+          resolve();
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    } else if (taskType === 'creation') {
+      for (const file of window.proofFiles.creation) {
+        const reader = new FileReader();
+        await new Promise((resolve, reject) => {
+          reader.onload = () => {
+            uploadedFiles.push({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: reader.result
+            });
+            resolve();
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+    }
+
+    await updateDoc(taskRef, {
+      column: 'pending_peer_approval',
+      type: taskType,
+      uploadedFiles: uploadedFiles,
+      updatedAt: serverTimestamp()
+    });
+
+    await logActivity(`📋 ${userDoc.name} submitted task for approval: ${document.getElementById('proofTaskTitle').textContent}`, 'pending');
+    toast("Task submitted for peer approval!", "success");
+    closeModal('proofSubmissionModal');
+    renderKanban();
+  } catch (e) {
+    console.error(e);
+    toast("Error submitting task", "error");
+  }
+};
+
+
+// Alert Modal Functions
+window.showAlert = function (title, message) {
+  document.getElementById('alertTitle').textContent = title;
+  document.getElementById('alertMessage').textContent = message;
+  openModal('alertModal');
+};
+
+window.closeAlertModal = function () {
+  closeModal('alertModal');
+};
+
+// Check if user can edit task
+window.canEditTask = function (task) {
+  // Can edit if: assigned to user OR created by user OR unassigned
+  console.log('canEditTask check:', {
+    taskAssignedTo: task.assignedTo,
+    currentUserUid: currentUser?.uid,
+    taskCreatedBy: task.createdBy,
+    isUnassigned: !task.assignedTo || task.assignedTo === '',
+    isAssignedToUser: task.assignedTo === currentUser?.uid,
+    isCreatedByUser: task.createdBy === currentUser?.uid
+  });
+
+  // Unassigned tasks can be edited by anyone
+  if (!task.assignedTo || task.assignedTo === '') return true;
+
+  // Assigned to current user
+  if (task.assignedTo === currentUser?.uid) return true;
+
+  // Created by current user
+  if (task.createdBy === currentUser?.uid) return true;
+
+  // Otherwise, cannot edit
+  return false;
+};

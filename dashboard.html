@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>StudySync — Dashboard</title>
     <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="css/quiz-verification.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap"
@@ -28,7 +29,7 @@
       <div
         class="sidebar-group-card"
         id="sidebarGroupCard"
-        onclick="openGroupModal()"
+        onclick="window.openGroupDetailsModal()"
       >
         <div class="group-avatar" id="sidebarGroupAvatar">SG</div>
         <div>
@@ -109,6 +110,13 @@
           </button>
           <button class="ai-btn" onclick="openModal('taskPrioritizerModal')" title="Prioritize Tasks">
             <i class="fa-solid fa-brain"></i> Prioritize
+          </button>
+          <button
+            class="icon-btn"
+            onclick="window.refreshAllData()"
+            title="Refresh Data"
+          >
+            <i class="fa-solid fa-rotate-right"></i>
           </button>
           <button
             class="icon-btn"
@@ -343,6 +351,36 @@
               ><span class="col-count" id="count-completed">0</span>
             </div>
             <div class="kanban-cards" id="cards-completed"></div>
+          </div>
+          <div
+            class="kanban-col"
+            id="col-pending_peer_approval"
+            ondragover="event.preventDefault()"
+            ondrop="dropTask(event, 'pending_peer_approval')"
+          >
+            <div class="kanban-col-header">
+              <span class="col-dot" style="background: #a78bfa"></span
+              ><span>Pending Approval</span
+              ><span class="col-count" id="count-pending_peer_approval">0</span>
+            </div>
+            <div class="kanban-filter-tabs" style="display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border);">
+              <button class="kanban-filter-btn active" onclick="window.filterPendingApproval('all', this)" style="flex: 1; padding: 8px 12px; background: var(--accent); color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 500;">All</button>
+              <button class="kanban-filter-btn" onclick="window.filterPendingApproval('mine', this)" style="flex: 1; padding: 8px 12px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 500;">Mine</button>
+              <button class="kanban-filter-btn" onclick="window.filterPendingApproval('others', this)" style="flex: 1; padding: 8px 12px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 500;">Others</button>
+            </div>
+            <div class="kanban-cards" id="cards-pending_peer_approval"></div>
+          </div>
+        </div>
+
+        <!-- VERIFICATION RESULTS SECTION -->
+        <div style="margin-top: 30px;">
+          <div class="card">
+            <div class="card-header">
+              <span><i class="fa-solid fa-check-double"></i> Verification Results</span>
+            </div>
+            <div id="verificationResultsContainer" class="modal-body">
+              <div class="empty-state">No verification results yet</div>
+            </div>
           </div>
         </div>
       </div>
@@ -612,6 +650,129 @@
       </div>
     </main>
 
+    <!-- TASK SUBMISSION MODAL -->
+    <div class="modal-overlay hidden" id="taskSubmissionModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span>Submit Task as Completed</span>
+          <button onclick="window.closeTaskSubmissionModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Task Type</label>
+            <select id="submitTaskType" onchange="window.updateSubmitTaskTypeFields()">
+              <option value="learning">📚 Learning</option>
+              <option value="creation">✏️ Creation</option>
+            </select>
+          </div>
+          <div class="form-group" id="submitTaskTypeFileGroup">
+            <label id="submitTaskTypeFileLabel">Upload Quiz Result Screenshot</label>
+            <input type="file" id="submitTaskTypeFiles" multiple accept=".jpg,.jpeg,.png,.gif" />
+            <small id="submitTaskTypeFileHint" style="color: var(--text-muted);">For Learning: Screenshot of quiz results (PNG, JPG, GIF)</small>
+          </div>
+          <button class="btn-primary" onclick="window.submitTaskAsCompleted()" style="width: 100%; margin-top: 16px;">
+            <span>Submit for Approval</span>
+            <i class="fa-solid fa-check"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALERT MODAL -->
+    <div class="modal-overlay hidden" id="alertModal">
+      <div class="modal-card alert-modal-card">
+        <div class="modal-header">
+          <span id="alertTitle">Alert</span>
+          <button onclick="window.closeAlertModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="alert-content">
+            <i class="fa-solid fa-circle-exclamation alert-icon"></i>
+            <p id="alertMessage">This task is not assigned to you</p>
+          </div>
+          <button class="btn-primary" onclick="window.closeAlertModal()" style="width: 100%; margin-top: 16px;">
+            <span>Okay</span>
+            <i class="fa-solid fa-check"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROOF SUBMISSION MODAL (for drag to complete) -->
+    <div class="modal-overlay hidden" id="proofSubmissionModal">
+      <div class="modal-card proof-modal-card">
+        <div class="modal-header">
+          <span>Submit Task as Completed</span>
+          <button onclick="window.closeProofSubmissionModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="proof-task-info">
+            <h4 id="proofTaskTitle">Task Title</h4>
+            <p id="proofTaskType" style="color: var(--text-muted); font-size: 12px;"></p>
+          </div>
+
+          <!-- Learning Task Proof -->
+          <div id="learningProofSection" style="display: none;">
+            <div class="form-group">
+              <label>Upload Quiz Result Screenshot</label>
+              <div class="proof-upload-area">
+                <input 
+                  type="file" 
+                  id="learningProofInput" 
+                  accept="image/*" 
+                  onchange="window.handleProofImageUpload(event)"
+                  class="proof-file-input"
+                />
+                <div class="proof-upload-placeholder">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <p>Click to upload or drag image here</p>
+                  <small>PNG, JPG, GIF up to 5MB</small>
+                </div>
+              </div>
+              <div id="learningProofPreview" class="proof-image-preview"></div>
+            </div>
+          </div>
+
+          <!-- Creation Task Proof -->
+          <div id="creationProofSection" style="display: none;">
+            <div class="form-group">
+              <label>Upload Work Files</label>
+              <div class="proof-upload-area">
+                <input 
+                  type="file" 
+                  id="creationProofInput" 
+                  accept=".doc,.docx,.ppt,.pptx,.pdf,.jpg,.png,.xls,.xlsx"
+                  multiple
+                  onchange="window.handleCreationFilesUpload(event)"
+                  class="proof-file-input"
+                />
+                <div class="proof-upload-placeholder">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                  <p>Click to upload or drag files here</p>
+                  <small>Doc, PPT, PDF, Excel, Images up to 10MB each</small>
+                </div>
+              </div>
+              <div id="creationProofPreview" class="proof-files-preview"></div>
+            </div>
+          </div>
+
+          <div id="proofUploadStatus" class="proof-upload-status"></div>
+
+          <button id="proofSubmitBtn" class="btn-primary" onclick="window.submitProofAndComplete()" style="width: 100%; margin-top: 16px;">
+            <span>Submit & Move to Pending Approval</span>
+            <i class="fa-solid fa-check"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- TASK PROOF VERIFICATION MODAL -->
     <div class="modal-overlay hidden" id="proofVerificationModal">
       <div class="modal-card proof-modal-card">
@@ -664,6 +825,43 @@
             <span>Submit Proof</span>
             <i class="fa-solid fa-check"></i>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TASK QUIZ VERIFICATION MODAL -->
+    <div class="modal-overlay hidden" id="taskVerificationModal">
+      <div class="modal-card task-verification-modal">
+        <div class="modal-header">
+          <span>Verify Task with Quiz</span>
+          <button onclick="window.closeTaskVerificationModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="verification-task-info">
+            <h4 id="verificationTaskTitle">Task Title</h4>
+            <p id="verificationTaskDesc">Complete this task to verify</p>
+          </div>
+
+          <div id="verificationStartSection">
+            <div class="verification-start-icon">📝</div>
+            <div class="verification-start-text">
+              <h3>Take a Quiz</h3>
+              <p>Answer 5 questions about the task topic. Score 70% or higher to pass.</p>
+            </div>
+            <button class="btn-primary" onclick="window.startTaskVerificationQuiz()" style="width: 100%; margin-top: 16px;">
+              <i class="fa-solid fa-play"></i> Start Quiz
+            </button>
+          </div>
+
+          <div id="verificationQuizLoading">
+            <i class="fa-solid fa-spinner"></i>
+            <p>Loading quiz questions...</p>
+          </div>
+
+          <div id="verificationQuizContainer"></div>
         </div>
       </div>
     </div>
@@ -736,6 +934,26 @@
       </div>
     </div>
 
+    <!-- SUBMITTED FILES MODAL -->
+    <div class="modal-overlay hidden" id="submittedFilesModal">
+      <div class="modal-card proof-modal-card">
+        <div class="modal-header">
+          <span>Submitted Files</span>
+          <button onclick="window.closeSubmittedFilesModal()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- FILE PREVIEW MODAL -->
+    <div class="modal-overlay hidden" id="filePreviewModal">
+      <div class="modal-card proof-modal-card" style="max-width: 800px;">
+        <div class="modal-body"></div>
+      </div>
+    </div>
+
     <!-- GROUP MODAL -->
 
     <div class="modal-overlay hidden" id="groupModal">
@@ -793,6 +1011,23 @@
           </button>
         </div>
         <div id="groupModalMsg" class="auth-msg hidden"></div>
+      </div>
+    </div>
+
+    <!-- GROUP DETAILS MODAL -->
+    <div class="modal-overlay hidden" id="groupDetailsModal">
+      <div class="modal-card" style="max-width: 500px;">
+        <div class="modal-header">
+          <span>Group Details</span>
+          <button onclick="closeModal('groupDetailsModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div id="groupDetailsContent" style="padding: 20px 0;">
+            <!-- Group details will be populated here -->
+          </div>
+        </div>
       </div>
     </div>
 
@@ -897,14 +1132,56 @@
             />
           </div>
           <div class="form-group">
-            <label>Deadline Date</label><input type="date" id="tskDeadline" />
+            <label>Task Type</label>
+            <select id="tskType">
+              <option value="learning">📚 Learning</option>
+              <option value="creation">✏️ Creation</option>
+            </select>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Start Time</label><input type="time" id="tskStartTime" />
+          <div class="form-group">
+            <label>Deadline Date</label>
+            <div class="deadline-date-picker-wrapper">
+              <input 
+                type="text" 
+                id="tskDeadlineDisplay" 
+                placeholder="Select date..." 
+                readonly
+                class="deadline-date-input"
+                onclick="window.openDeadlineCalendar()"
+              />
+              <i class="fa-solid fa-calendar" onclick="window.openDeadlineCalendar()" style="cursor: pointer; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
             </div>
-            <div class="form-group">
-              <label>End Time</label><input type="time" id="tskEndTime" />
+            <input type="hidden" id="tskDeadline" />
+            <div id="deadlineCalendarModal" class="modal-overlay hidden">
+              <div class="modal-card deadline-calendar-card">
+                <div class="modal-header">
+                  <span>Select Deadline Date</span>
+                  <button onclick="window.closeDeadlineCalendar()">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+                <div class="modal-body">
+                  <div class="deadline-calendar-header">
+                    <button onclick="window.prevDeadlineMonth()" class="deadline-nav-btn">
+                      <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <span id="deadlineCalendarTitle" class="deadline-month-title"></span>
+                    <button onclick="window.nextDeadlineMonth()" class="deadline-nav-btn">
+                      <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                  </div>
+                  <div class="deadline-calendar-weekdays">
+                    <div>Sun</div>
+                    <div>Mon</div>
+                    <div>Tue</div>
+                    <div>Wed</div>
+                    <div>Thu</div>
+                    <div>Fri</div>
+                    <div>Sat</div>
+                  </div>
+                  <div id="deadlineCalendarDays" class="deadline-calendar-days"></div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="form-row">
@@ -921,7 +1198,6 @@
               <select id="tskColumn">
                 <option value="todo">To Do</option>
                 <option value="inprogress">In Progress</option>
-                <option value="completed">Completed</option>
               </select>
             </div>
           </div>
@@ -1080,48 +1356,29 @@
           <button class="modal-close" onclick="closeModal('aiSettingsModal')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
-          <div style="padding: 12px; background: var(--surface2); border-radius: 8px; font-size: 13px; color: var(--text); margin-bottom: 20px;">
-            <strong>✅ API Key Configured</strong><br>
-            <p style="margin-top: 8px; color: var(--text-muted);">
-              Your OpenRouter API key is set up and ready to use.
-            </p>
-            <p style="margin-top: 12px; color: var(--text-muted); font-size: 12px;">
-              <strong>Available Features:</strong><br>
-              • <strong>Ask AI:</strong> Ask academic questions and get instant answers<br>
-              • <strong>Prioritize:</strong> Get AI recommendations on which tasks to do first
-            </p>
+          <div style="padding: 16px; background: var(--surface2); border-radius: 8px; font-size: 13px; color: var(--text);">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+              <i class="fa-solid fa-shield-check" style="color: var(--accent); font-size: 20px; margin-top: 2px;"></i>
+              <div>
+                <strong style="font-size: 14px;">✅ Secure AI System</strong>
+                <p style="margin: 8px 0 0 0; color: var(--text-muted); line-height: 1.5;">
+                  All AI features are powered by secure backend services. Your data is protected and no API keys are exposed in the frontend.
+                </p>
+                <p style="margin: 12px 0 0 0; color: var(--text-muted); font-size: 12px;">
+                  <strong>Available Features:</strong><br>
+                  • <strong>Ask AI:</strong> Ask academic questions and get instant answers<br>
+                  • <strong>Prioritize:</strong> Get AI recommendations on which tasks to do first<br>
+                  • <strong>Task Proof Verification:</strong> AI-powered validation of task completion proofs
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div style="border-top: 1px solid var(--border); padding-top: 20px;">
-            <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--text);">HuggingFace API Key (for Task Proof Verification)</h4>
-            <p style="margin: 0 0 12px 0; font-size: 12px; color: var(--text-muted);">
-              Used for AI-powered task proof validation. Get your free token at <a href="https://huggingface.co/settings/tokens" target="_blank" style="color: var(--accent);">huggingface.co/settings/tokens</a>
+          <div style="margin-top: 20px; padding: 12px; background: var(--surface1); border-left: 3px solid var(--accent); border-radius: 4px;">
+            <p style="margin: 0; font-size: 12px; color: var(--text-muted);">
+              <i class="fa-solid fa-info-circle" style="margin-right: 6px;"></i>
+              <strong>No Configuration Needed:</strong> API keys are managed securely on the backend. You can start using AI features immediately.
             </p>
-            
-            <div class="form-group">
-              <label>API Token</label>
-              <input 
-                type="password" 
-                id="hfTokenInput" 
-                placeholder="hf_..." 
-                class="quiz-input"
-                style="font-family: monospace; font-size: 12px;"
-              />
-              <small style="color: var(--text-muted); margin-top: 4px; display: block;">
-                Your token is stored locally in your browser and never sent to our servers
-              </small>
-            </div>
-
-            <div class="form-row" style="gap: 8px;">
-              <button class="btn-primary" onclick="saveHFToken()" style="flex: 1;">
-                <i class="fa-solid fa-save"></i> Save Token
-              </button>
-              <button class="btn-accent" onclick="testHFToken()" style="flex: 1;">
-                <i class="fa-solid fa-flask"></i> Test Connection
-              </button>
-            </div>
-
-            <div id="hfTokenStatus" style="margin-top: 12px;"></div>
           </div>
         </div>
       </div>
@@ -1132,6 +1389,7 @@
     <script src="js/group-discussion.js"></script>
     <script src="js/smart-learn.js"></script>
     <script src="js/quiz-generator.js"></script>
+    <script src="js/quiz-task-verification.js"></script>
     <script src="js/task-proof-verification.js"></script>
     <script type="module" src="js/app.js"></script>
   </body>

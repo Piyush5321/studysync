@@ -1088,7 +1088,7 @@ body {
 /* ===== KANBAN ===== */
 .kanban-board {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   height: calc(100vh - var(--topbar-h) - 120px);
   overflow: hidden;
@@ -1199,6 +1199,13 @@ body {
 .task-card.dragging {
   opacity: 0.5;
   cursor: grabbing;
+}
+
+.task-card[draggable="false"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .task-card-title {
@@ -2092,6 +2099,15 @@ body {
 
 .task-act-btn.danger:hover {
   color: var(--danger);
+}
+
+.task-act-btn.verify {
+  color: var(--accent);
+}
+
+.task-act-btn.verify:hover {
+  background: var(--surface2);
+  color: var(--accent);
 }
 
 /* Resource page */
@@ -4356,6 +4372,7 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   background: var(--surface2);
+  overflow: hidden;
 }
 
 .proof-upload-area:hover {
@@ -4364,7 +4381,14 @@ body {
 }
 
 .proof-file-input {
-  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 10;
 }
 
 .proof-upload-placeholder {
@@ -4373,6 +4397,7 @@ body {
   align-items: center;
   gap: 8px;
   color: var(--text-muted);
+  pointer-events: none;
 }
 
 .proof-upload-placeholder i {
@@ -4665,4 +4690,39 @@ body {
   .verification-btn {
     flex: 1;
   }
+}
+
+
+/* ===== STUDY CONTROLS ===== */
+.study-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.study-controls .btn-small {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.study-controls .btn-small:hover {
+  background: var(--surface3);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.study-controls .btn-small i {
+  font-size: 11px;
 }

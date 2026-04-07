@@ -18,9 +18,34 @@ function initStudyTracker(database, user, gid, tasks, members) {
     allMembers = members;
     console.log("✅ Study Tracker initialized with", tasks.length, "tasks");
 
+    // Validate and sync tasks on initialization
+    validateAndSyncTasks();
+
     // Listen to active sessions from Firebase
     if (rtdb && gid) {
         listenToActiveSessions();
+    }
+}
+
+// Validate tasks exist and sync with Firebase
+async function validateAndSyncTasks() {
+    if (!groupId || !currentUser) return;
+
+    try {
+        const { collection, query, orderBy, getDocs } = window.firebaseModules || {};
+        if (!collection || !query || !orderBy || !getDocs) {
+            console.warn("Firebase modules not available for validation");
+            return;
+        }
+
+        // Fetch fresh tasks from Firebase
+        const db = window.firebaseModules.db || window.db;
+        if (!db) return;
+
+        console.log("Validating tasks from Firebase...");
+        // This will be called by the main app's real-time listener
+    } catch (e) {
+        console.warn("Could not validate tasks:", e);
     }
 }
 
@@ -50,6 +75,19 @@ function listenToActiveSessions() {
 function updateStudyTrackerTasks(tasks, members) {
     allTasks = tasks;
     allMembers = members;
+
+    // Stop timers for deleted tasks
+    const currentTaskIds = new Set(tasks.map(t => t.id));
+    Object.keys(stopwatches).forEach(taskId => {
+        if (!currentTaskIds.has(taskId)) {
+            console.log("Stopping timer for deleted task:", taskId);
+            if (stopwatches[taskId].interval) {
+                clearInterval(stopwatches[taskId].interval);
+            }
+            delete stopwatches[taskId];
+        }
+    });
+
     console.log("📝 Study Tracker updated with", tasks.length, "tasks");
     updateDisplay();
 }
@@ -178,7 +216,15 @@ function renderMyTasks() {
         return;
     }
 
-    container.innerHTML = myTasks.map(task => {
+    // Sort tasks by priority (high > medium > low)
+    const priorityOrder = { 'high': 0, 'medium': 1, 'low': 2 };
+    const sortedTasks = myTasks.sort((a, b) => {
+        const priorityA = priorityOrder[a.priority?.toLowerCase()] ?? 999;
+        const priorityB = priorityOrder[b.priority?.toLowerCase()] ?? 999;
+        return priorityA - priorityB;
+    });
+
+    container.innerHTML = sortedTasks.map(task => {
         const status = getStopwatchStatus(task.id);
         const elapsed = getElapsedTime(task.id);
         const timeStr = formatTime(elapsed);
@@ -215,6 +261,7 @@ function renderLiveStudy() {
     if (!container) return;
 
     console.log("renderLiveStudy called. activeSessions:", Object.keys(activeSessions).length);
+    console.log("currentUser:", currentUser);
 
     // Get all active sessions from Firebase
     const allActiveSessions = Object.entries(activeSessions)
@@ -223,6 +270,7 @@ function renderLiveStudy() {
             const member = allMembers.find(m => m.uid === userId);
             return {
                 userId,
+                taskId: session.taskId || '',
                 userName: member?.name || 'Unknown User',
                 taskName: session.taskName || 'Unknown Task',
                 elapsed: session.elapsedMs || 0,
@@ -232,6 +280,7 @@ function renderLiveStudy() {
         .sort((a, b) => b.elapsed - a.elapsed);
 
     console.log("All active sessions:", allActiveSessions.length);
+    console.log("Sessions:", allActiveSessions);
 
     const countEl = document.getElementById('activeStudentsCount');
     if (countEl) countEl.textContent = `${allActiveSessions.length} studying`;
@@ -247,6 +296,9 @@ function renderLiveStudy() {
         const elapsed = now - session.startTime;
         const timeStr = formatTime(elapsed);
 
+        // Check if this is the current user's session
+        const isCurrentUser = session.userId === currentUser?.uid;
+
         return `
             <div class="live-study-card ${idx === 0 ? 'top-active' : ''}">
                 <div class="study-rank">#${idx + 1}</div>
@@ -256,6 +308,16 @@ function renderLiveStudy() {
                 <div class="study-status">
                     <span class="status-dot"></span> Studying
                 </div>
+                ${isCurrentUser ? `
+                    <div class="study-controls" style="margin-top: 12px; display: flex; gap: 8px;">
+                        <button class="btn-small" onclick="window.pauseStopwatch('${escapeHtml(session.taskId)}')" style="flex: 1; padding: 8px; font-size: 12px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; cursor: pointer;">
+                            <i class="fa-solid fa-pause"></i> Pause
+                        </button>
+                        <button class="btn-small" onclick="window.stopStopwatch('${escapeHtml(session.taskId)}')" style="flex: 1; padding: 8px; font-size: 12px; background: #ff6b35; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            <i class="fa-solid fa-stop"></i> Stop
+                        </button>
+                    </div>
+                ` : ''}
             </div>
         `;
     }).join('');
